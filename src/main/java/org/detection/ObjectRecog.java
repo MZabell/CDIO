@@ -2,13 +2,9 @@ package org.detection;
 
 import nu.pattern.OpenCV;
 import org.opencv.core.*;
+import org.opencv.highgui.HighGui;
 import org.opencv.imgproc.Imgproc;
-import org.opencv.imgproc.Moments;
 import org.opencv.videoio.VideoCapture;
-import org.opencv.videoio.VideoWriter;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class ObjectRecog {
 
@@ -17,65 +13,38 @@ public class ObjectRecog {
 
         VideoCapture capture = new VideoCapture("src/main/resources/video.mp4");
 
-        Size framesize = new Size(capture.get(3), capture.get(4));
-
-        VideoWriter writer = new VideoWriter("src/main/resources/output.mp4", VideoWriter.fourcc('a', 'v', 'c', '1'), 30, framesize);
-
         Mat image = new Mat();
         Mat mask = new Mat();
-        Scalar lower = new Scalar(0, 0, 100);
-        Scalar upper = new Scalar(100, 30, 255);
-        List<MatOfPoint> contours = new ArrayList<>();
-        Mat hierarchy = new Mat();
-        Size kernelSize = new Size(15, 15);
-        Mat kernel;
+        Scalar lower = new Scalar(130, 130, 130);
+        Scalar upper = new Scalar(255, 255, 255);
+        Mat circles = new Mat();
 
         while (capture.read(image)) {
-            capture.read(image);
-            Imgproc.cvtColor(image, mask, Imgproc.COLOR_BGR2HSV);
+            Imgproc.cvtColor(image, mask, Imgproc.COLOR_BGR2GRAY);
 
-            kernel = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_ELLIPSE, kernelSize);
+            Imgproc.GaussianBlur(mask, mask, new Size(7, 7), 2);
 
-            Core.inRange(mask, lower, upper, mask);
-            Imgproc.morphologyEx(mask, mask, Imgproc.MORPH_OPEN, kernel);
-            kernelSize.width = 20;
-            kernelSize.height = 20;
-            kernel = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_ELLIPSE, kernelSize);
-            Imgproc.erode(mask, mask, kernel);
-            kernelSize.width = 18;
-            kernelSize.height = 18;
-            kernel = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_ELLIPSE, kernelSize);
-            Imgproc.dilate(mask, mask, kernel);
+            Imgproc.HoughCircles(mask, circles, Imgproc.HOUGH_GRADIENT, 1.0, 25, 60, 40, 1, 150);
+            for (int i = 0; i < circles.cols(); i++) {
+                double[] circle = circles.get(0, i);
+                Point center = new Point(Math.round(circle[0]), Math.round(circle[1]));
+                int radius = (int) Math.round(circle[2]);
 
-            Imgproc.findContours(mask, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
-            List<MatOfPoint> hullList = new ArrayList<>();
-            for (MatOfPoint contour : contours) {
-                MatOfInt hull = new MatOfInt();
-                Imgproc.convexHull(contour, hull);
-                Point[] contourArray = contour.toArray();
-                Point[] hullPoints = new Point[hull.rows()];
-                List<Integer> hullContourIdxList = hull.toList();
-                for (int i = 0; i < hullContourIdxList.size(); i++) {
-                    hullPoints[i] = contourArray[hullContourIdxList.get(i)];
+                Rect roi = new Rect((int) center.x - radius, (int) center.y - radius, radius * 2, radius * 2);
+
+                Mat roiMat = new Mat(image, roi);
+                Mat color = new Mat(roiMat.size(), CvType.CV_8UC3, Core.mean(roiMat));
+                Core.inRange(color, lower, upper, color);
+                if (Core.countNonZero(color) > 0) {
+                    Imgproc.circle(image, center, 1, new Scalar(0, 100, 100), 3);
+                    Imgproc.circle(image, center, radius, new Scalar(0, 255, 0), 2);
                 }
-                hullList.add(new MatOfPoint(hullPoints));
             }
 
-            for (MatOfPoint hull : hullList) {
-                if (!Imgproc.isContourConvex(hull) || Imgproc.contourArea(hull) > 2000)
-                    continue;
-                Moments moments = Imgproc.moments(hull);
-                Point center = new Point(moments.get_m10() / moments.get_m00(), moments.get_m01() / moments.get_m00());
-                Imgproc.circle(image, center, (int) Math.sqrt(Imgproc.contourArea(hull) / Math.PI), new Scalar(0, 255, 0), 2);
-            }
-
-            //Imgcodecs.imwrite("src/main/resources/mask.jpg", mask);
-            //Imgcodecs.imwrite("src/main/resources/output.jpg", image);
-            writer.write(image);
-            contours.clear();
+            HighGui.imshow("Output", image);
+            HighGui.waitKey(1);
         }
         capture.release();
-        writer.release();
         return 0;
     }
 }
