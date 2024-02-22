@@ -7,19 +7,27 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Server implements PropertyChangeListener {
 
     Socket socket;
     ServerSocket serverSocket;
-    DataInputStream in;
-    DataOutputStream out;
-    Thread scanThread;
+    Thread scanThread, clientThread;
     String command = "";
 
+    ObjectRecog objectRecog;
+
+    ArrayList<DataOutputStream> outputStreams;
+    int mode = 0;
+
     public Server(ObjectRecog objectRecog) {
+        this.objectRecog = objectRecog;
+        outputStreams = new ArrayList<>();
 
         objectRecog.addPropertyChangeListener(this);
+
 
         scanThread = new Thread(objectRecog::scan);
         scanThread.start();
@@ -29,24 +37,21 @@ public class Server implements PropertyChangeListener {
             System.out.println("Server is waiting for client request");
 
             while ((socket = serverSocket.accept()) != null) {
+                outputStreams.add(new DataOutputStream(socket.getOutputStream()));
 
                 System.out.println("Client connected");
 
-                in = new DataInputStream(socket.getInputStream());
-                out = new DataOutputStream(socket.getOutputStream());
+                clientThread = new Thread(() -> {
+                    try {
+                        outputStreams.get(mode).writeUTF(String.valueOf(mode));
+                        mode++;
+                        runClient();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+                clientThread.start();
 
-                DetectedObject object;
-
-                while (!objectRecog.getQueue().isEmpty()) {
-                    object = objectRecog.getQueue().peek();
-                    objectRecog.sendCommand(object);
-                }
-
-                System.out.println("Out of loop");
-
-                in.close();
-                out.close();
-                socket.close();
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -58,9 +63,21 @@ public class Server implements PropertyChangeListener {
         command = (String) evt.getNewValue();
         System.out.println("Sent command: " + command);
         try {
-            out.writeUTF(command);
+            for (DataOutputStream out : outputStreams) {
+                out.writeUTF(command);
+            }
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    private void runClient() throws IOException {
+
+        DetectedObject object;
+
+        while (!objectRecog.getQueue().isEmpty()) {
+            object = objectRecog.getQueue().peek();
+            objectRecog.sendCommand(object);
         }
     }
 }

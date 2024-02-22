@@ -12,37 +12,67 @@ public class Client {
     DataOutputStream out;
     String message;
 
+    MotorController motorController;
+
+    String mode;
+
     public Client(String IP) {
         try {
-            MotorController motorController = new MotorController();
+            motorController = new MotorController();
             socket = new Socket(IP, 5000);
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
-            while (!(message = in.readUTF()).equals("exit")) {
-                System.out.println("Received message: " + message);
-                switch (message) {
-                    case "FORWARD":
-                        motorController.moveForward();
-                        break;
-                    case "BACKWARD":
-                        motorController.moveBackward();
-                        break;
-                    case "STOP":
-                        motorController.stop();
-                        break;
-                    case "LEFT":
-                        // need to implement
-                        break;
-                    case "RIGHT":
-                        // need to implement
-                        break;
-                }
+            mode = in.readUTF();
+
+            switch (mode) {
+                case "0":
+                    modeX();
+                    break;
+                case "1":
+                    modeY();
+                    break;
             }
+
             in.close();
             out.close();
             socket.close();
         } catch (IOException e) {
+            motorController.stop();
             throw new RuntimeException(e);
+        }
+    }
+
+    private void modeX() throws IOException {
+        while (!(message = in.readUTF()).equals("EXIT")) {
+            System.out.println("Received message: " + message);
+            switch (message) {
+                case "LEFT":
+                    // need to implement
+                    break;
+                case "RIGHT":
+                    // need to implement
+                    break;
+                default:
+                    motorController.stop();
+                    break;
+            }
+        }
+    }
+
+    private void modeY() throws IOException {
+        while (!(message = in.readUTF()).equals("EXIT")) {
+            System.out.println("Received message: " + message);
+            switch (message) {
+                case "FORWARD":
+                    motorController.moveForward();
+                    break;
+                case "BACKWARD":
+                    motorController.moveBackward();
+                    break;
+                default:
+                    motorController.stop();
+                    break;
+            }
         }
     }
 }

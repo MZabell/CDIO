@@ -4,6 +4,7 @@ import org.bytedeco.javacv.*;
 import org.bytedeco.opencv.opencv_core.*;
 import org.bytedeco.opencv.opencv_imgproc.Vec3fVector;
 import org.bytedeco.opencv.opencv_tracking.TrackerCSRT;
+import org.bytedeco.opencv.opencv_tracking.TrackerKCF;
 
 import javax.swing.*;
 import java.beans.PropertyChangeListener;
@@ -42,8 +43,8 @@ public class ObjectRecog {
 
     void scan() {
 
-        ArrayList<TrackerCSRT> trackers = new ArrayList<>();
-        ArrayList<TrackerCSRT> trackersToRemove = new ArrayList<>();
+        ArrayList<TrackerKCF> trackers = new ArrayList<>();
+        ArrayList<TrackerKCF> trackersToRemove = new ArrayList<>();
         ArrayList<DetectedObject> detectedObjects = new ArrayList<>();
         queue = new PriorityBlockingQueue<>(10, (o1, o2) -> {
             if (o1.getDistance() > o2.getDistance())
@@ -67,7 +68,7 @@ public class ObjectRecog {
 
         try {
             grabber.start();
-            lockZone = new Rect(grabber.getImageWidth() / 2 - 50, grabber.getImageHeight() / 2 - 50, 50, 50);
+            lockZone = new Rect(grabber.getImageWidth() / 2 - 50, grabber.getImageHeight() / 2 - 50, 70, 70);
             Frame frame;
             while ((frame = grabber.grab()) != null) {
                 image = converter.convert(frame);
@@ -108,7 +109,7 @@ public class ObjectRecog {
                         DetectedObject object = new DetectedObject(roi, center, radius);
                         detectedObjects.add(object);
                         queue.add(object);
-                        TrackerCSRT tracker = TrackerCSRT.create();
+                        TrackerKCF tracker = TrackerKCF.create();
                         tracker.init(image, roi);
                         trackers.add(tracker);
                     }
