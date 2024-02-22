@@ -1,18 +1,14 @@
 package org.brick;
 import ev3dev.actuators.Sound;
 import ev3dev.actuators.lego.motors.EV3LargeRegulatedMotor;
-import ev3dev.sensors.Button;
 import lejos.hardware.port.MotorPort;
 import lejos.robotics.RegulatedMotor;
-import lejos.utility.Delay;
 
 public class MotorController {
-
     private EV3LargeRegulatedMotor motorA;
     private EV3LargeRegulatedMotor motorB;
     private EV3LargeRegulatedMotor motorC;
     private EV3LargeRegulatedMotor motorD;
-
     public MotorController() {
 
         motorA = new EV3LargeRegulatedMotor(MotorPort.A);
@@ -23,15 +19,8 @@ public class MotorController {
         Sound sound = Sound.getInstance();
         sound.twoBeeps();
 
-        double distanceCM = 150.0;
-        int speed = 350;
-        int acc = 6000;
-
         System.out.println("\n\n\n\n\nPress i midten to start");
-        while (!Button.ENTER.isDown()) {Delay.msDelay(100);}
-
         sound.beep();
-        moveSynchronizedDistance4Motors(distanceCM,speed,acc);
         sound.twoBeeps();
     }
     public void moveForward() {
@@ -46,11 +35,7 @@ public class MotorController {
         motorC.backward();
         motorD.backward();
         motorC.endSynchronization();
-
-        Delay.msDelay(3000);
-        stop();
     }
-
     public void moveForwardControlled() {
         motorA.setSpeed(300);
         motorB.setSpeed(300);
@@ -64,25 +49,22 @@ public class MotorController {
 
         motorA.synchronizeWith(new RegulatedMotor[]{motorB});
         motorA.startSynchronization();
-        motorA.rotate(360, true); // Positive degrees for forward movement
-        motorB.rotate(360, true); // Positive degrees for forward movement
+        motorA.rotate(360, true);
+        motorB.rotate(360, true);
         motorA.endSynchronization();
 
         // Synchronize motors C and D for backward movement
         motorC.synchronizeWith(new RegulatedMotor[]{motorD});
         motorC.startSynchronization();
-        motorC.rotate(-360, true); // Negative degrees for backward movement
-        motorD.rotate(-360, true); // Negative degrees for backward movement
+        motorC.rotate(-360, true);
+        motorD.rotate(-360, true);
         motorC.endSynchronization();
 
-        // Wait for all movements to complete
         motorA.waitComplete();
         motorB.waitComplete();
         motorC.waitComplete();
         motorD.waitComplete();
     }
-
-
     public void stop() {
         motorA.synchronizeWith(new RegulatedMotor[]{motorB});
         motorA.startSynchronization();
@@ -101,9 +83,6 @@ public class MotorController {
         motorC.resetTachoCount();
         motorD.resetTachoCount();
     }
-
-
-
     public void moveBackward() {
         motorA.synchronizeWith(new RegulatedMotor[]{motorB});
         motorA.startSynchronization();
@@ -116,11 +95,7 @@ public class MotorController {
         motorC.forward();
         motorD.forward();
         motorC.endSynchronization();
-
-        Delay.msDelay(3000);
-        stop();
     }
-
     public void moveBackwardControlled() {
 
         motorA.setSpeed(300);
@@ -150,7 +125,24 @@ public class MotorController {
         motorC.waitComplete();
         motorD.waitComplete();
     }
-
+    public void moveRight(){
+        motorA.setSpeed(300);
+        motorB.setSpeed(300);
+        motorA.synchronizeWith(new RegulatedMotor[]{motorB});
+        motorA.startSynchronization();
+        motorA.backward();
+        motorB.backward();
+        motorA.endSynchronization();
+    } // right == backward
+    public void moveLeft(){
+        motorA.setSpeed(300);
+        motorB.setSpeed(300);
+        motorA.synchronizeWith(new RegulatedMotor[]{motorB});
+        motorA.startSynchronization();
+        motorA.forward();
+        motorB.forward();
+        motorA.endSynchronization();
+    } //left == forward
     public void moveSynchronizedDistance4Motors(double distanceInCm, int speed, int acc) {
         motorA.setSpeed(speed);
         motorB.setSpeed(speed);
@@ -185,5 +177,4 @@ public class MotorController {
         motorC.waitComplete();
         motorD.waitComplete();
     }
-
 }
