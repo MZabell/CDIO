@@ -9,6 +9,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Scanner;
 
 public class Server implements PropertyChangeListener {
 
@@ -19,18 +20,34 @@ public class Server implements PropertyChangeListener {
 
     ObjectRecog objectRecog;
 
+    Scanner scanner;
     ArrayList<DataOutputStream> outputStreams;
+    ArrayList<Thread> threads;
     int mode = 0;
 
     public Server(ObjectRecog objectRecog) {
         this.objectRecog = objectRecog;
         outputStreams = new ArrayList<>();
+        threads = new ArrayList<>();
+        scanner = new Scanner(System.in);
 
         objectRecog.addPropertyChangeListener(this);
 
 
         scanThread = new Thread(objectRecog::scan);
         scanThread.start();
+        new Thread(() -> {
+            if (scanner.hasNext()) {
+                for (DataOutputStream out : outputStreams) {
+                    try {
+                        out.writeUTF("STOP");
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                System.exit(0);
+            }
+        }).start();
 
         try {
             serverSocket = new ServerSocket(5000);
@@ -41,16 +58,12 @@ public class Server implements PropertyChangeListener {
 
                 System.out.println("Client connected");
 
-                clientThread = new Thread(() -> {
-                    try {
-                        outputStreams.get(mode).writeUTF(String.valueOf(mode));
-                        mode++;
-                        runClient();
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
-                clientThread.start();
+                outputStreams.get(mode).writeUTF(String.valueOf(mode));
+                mode++;
+
+               if (mode == 2) {
+                  runClient();
+                }
 
             }
         } catch (IOException e) {
@@ -71,7 +84,7 @@ public class Server implements PropertyChangeListener {
         }
     }
 
-    private void runClient() throws IOException {
+    private void runClient() {
 
         DetectedObject object;
 

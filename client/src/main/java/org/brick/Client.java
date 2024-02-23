@@ -47,10 +47,10 @@ public class Client {
             System.out.println("Received message: " + message);
             switch (message) {
                 case "LEFT":
-                    // need to implement
+                    motorController.moveLeft();
                     break;
                 case "RIGHT":
-                    // need to implement
+                    motorController.moveRight();
                     break;
                 default:
                     motorController.stop();

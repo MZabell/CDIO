@@ -16,6 +16,16 @@ public class MotorController {
         motorC = new EV3LargeRegulatedMotor(MotorPort.C);
         motorD = new EV3LargeRegulatedMotor(MotorPort.D);
 
+        motorA.setSpeed(200);
+        motorB.setSpeed(200);
+        motorC.setSpeed(200);
+        motorD.setSpeed(200);
+
+        motorA.setAcceleration(100);
+        motorB.setAcceleration(100);
+        motorC.setAcceleration(100);
+        motorD.setAcceleration(100);
+
         Sound sound = Sound.getInstance();
         sound.twoBeeps();
 
@@ -37,15 +47,6 @@ public class MotorController {
         motorC.endSynchronization();
     }
     public void moveForwardControlled() {
-        motorA.setSpeed(300);
-        motorB.setSpeed(300);
-        motorC.setSpeed(300);
-        motorD.setSpeed(300);
-
-        motorA.setAcceleration(3000);
-        motorB.setAcceleration(3000);
-        motorC.setAcceleration(3000);
-        motorD.setAcceleration(3000);
 
         motorA.synchronizeWith(new RegulatedMotor[]{motorB});
         motorA.startSynchronization();
@@ -126,8 +127,6 @@ public class MotorController {
         motorD.waitComplete();
     }
     public void moveRight(){
-        motorA.setSpeed(300);
-        motorB.setSpeed(300);
         motorA.synchronizeWith(new RegulatedMotor[]{motorB});
         motorA.startSynchronization();
         motorA.backward();
@@ -135,8 +134,6 @@ public class MotorController {
         motorA.endSynchronization();
     } // right == backward
     public void moveLeft(){
-        motorA.setSpeed(300);
-        motorB.setSpeed(300);
         motorA.synchronizeWith(new RegulatedMotor[]{motorB});
         motorA.startSynchronization();
         motorA.forward();

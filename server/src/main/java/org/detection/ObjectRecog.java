@@ -43,8 +43,10 @@ public class ObjectRecog {
 
     void scan() {
 
-        ArrayList<TrackerKCF> trackers = new ArrayList<>();
-        ArrayList<TrackerKCF> trackersToRemove = new ArrayList<>();
+        TrackerCSRT.Params params = new TrackerCSRT.Params();
+        params.psr_threshold(0.2f);
+        ArrayList<TrackerCSRT> trackers = new ArrayList<>();
+        ArrayList<TrackerCSRT> trackersToRemove = new ArrayList<>();
         ArrayList<DetectedObject> detectedObjects = new ArrayList<>();
         queue = new PriorityBlockingQueue<>(10, (o1, o2) -> {
             if (o1.getDistance() > o2.getDistance())
@@ -62,8 +64,8 @@ public class ObjectRecog {
         Mat image;
         Mat gray = new Mat();
         Vec3fVector circles = new Vec3fVector();
-        Mat lower = new Mat(1, 1, CV_8UC4, new Scalar(130, 130, 130, 0));
-        Mat upper = new Mat(1, 1, CV_8UC4, new Scalar(255, 255, 255, 0));
+        Mat lower = new Mat(1, 1, CV_8UC4, new Scalar(160, 180, 200, 0));
+        Mat upper = new Mat(1, 1, CV_8UC4, new Scalar(240, 255, 255, 0));
         boolean isOverlapping = false;
 
         try {
@@ -76,7 +78,7 @@ public class ObjectRecog {
                 cvtColor(image, gray, CV_BGR2GRAY);
                 GaussianBlur(gray, gray, new Size(7, 7), 2);
 
-                HoughCircles(gray, circles, HOUGH_GRADIENT, 1, 20, 200, 40, 1, 0);
+                HoughCircles(gray, circles, HOUGH_GRADIENT, 1, 20, 200, 40, 1, 40);
                 for (int i = 0; i < (int) circles.size(); i++) {
                     Point3f circle = circles.get(i);
                     Point center = new Point(Math.round(circle.get(0)), Math.round(circle.get(1)));
@@ -104,19 +106,24 @@ public class ObjectRecog {
                     }
 
                     Mat color = new Mat(roiMat.size(), CV_8UC3, mean(roiMat));
+                    //System.out.println(mean(color));
                     inRange(color, lower, upper, color);
-                    if (countNonZero(color) > 0) {
-                        DetectedObject object = new DetectedObject(roi, center, radius);
+                    if (countNonZero(color) > 300) {
+                        DetectedObject object = new DetectedObject(roi, center, radius, color);
                         detectedObjects.add(object);
                         queue.add(object);
-                        TrackerKCF tracker = TrackerKCF.create();
+                        TrackerCSRT tracker = TrackerCSRT.create(params);
                         tracker.init(image, roi);
                         trackers.add(tracker);
                     }
                 }
                 for (DetectedObject o : detectedObjects) {
-                    if (trackers.get(detectedObjects.indexOf(o)).update(image, o.getRoi())) {
-                        o.updateCircle();
+                    boolean positive = trackers.get(detectedObjects.indexOf(o)).update(image, o.getRoi());
+                    o.updateCircle(image);
+                    System.out.println(mean(o.getColor()));
+                    inRange(o.getColor(), lower, upper, o.getColor());
+                    if (positive && countNonZero(o.getColor()) > o.getRoi().area() * 0.95) {
+                        o.updateCircle(image);
                         putText(image, (int) o.getDistance() + " cm", o.getRoi().tl(), FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(255, 0, 0, 0));
                         circle(image, o.getCenter(), o.getRadius(), new Scalar(0, 255, 0, 0), 2, LINE_8, 0);
                     } else {
@@ -127,7 +134,6 @@ public class ObjectRecog {
 
                 trackers.removeAll(trackersToRemove);
                 detectedObjects.removeAll(objectsToRemove);
-
 
                 rectangle(image, lockZone, new Scalar(0, 0, 255, 0));
 
