@@ -9,6 +9,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Scanner;
 
 public class Server implements PropertyChangeListener {
@@ -61,9 +62,12 @@ public class Server implements PropertyChangeListener {
                 outputStreams.get(mode).writeUTF(String.valueOf(mode));
                 mode++;
 
-               if (mode == 2) {
-                  runClient();
+                if (mode == 2) {
+                    objectRecog.testRails();
                 }
+               while (mode == 2) {
+                   runClient();
+               }
 
             }
         } catch (IOException e) {
@@ -73,14 +77,19 @@ public class Server implements PropertyChangeListener {
 
     @Override
     public void propertyChange(PropertyChangeEvent evt) {
-        command = (String) evt.getNewValue();
-        System.out.println("Sent command: " + command);
-        try {
-            for (DataOutputStream out : outputStreams) {
-                out.writeUTF(command);
+        if (mode == 2) {
+            command = (String) evt.getNewValue();
+            //System.out.println("Sent command: " + command);
+            try {
+                if (Objects.equals(evt.getPropertyName(), "CommandY")) {
+                    outputStreams.get(1).writeUTF(command);
+                } else {
+                    outputStreams.get(0).writeUTF(command);
+                }
+
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
         }
     }
 
@@ -88,9 +97,13 @@ public class Server implements PropertyChangeListener {
 
         DetectedObject object;
 
-        while (!objectRecog.getQueue().isEmpty()) {
+        if (!objectRecog.getQueue().isEmpty()) {
             object = objectRecog.getQueue().peek();
+            if (object == null) {
+                return;
+            }
             objectRecog.sendCommand(object);
         }
+
     }
 }

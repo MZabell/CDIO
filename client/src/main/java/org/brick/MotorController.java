@@ -16,22 +16,15 @@ public class MotorController {
         motorC = new EV3LargeRegulatedMotor(MotorPort.C);
         motorD = new EV3LargeRegulatedMotor(MotorPort.D);
 
-        motorA.setSpeed(200);
-        motorB.setSpeed(200);
-        motorC.setSpeed(200);
-        motorD.setSpeed(200);
+        motorA.setSpeed(600);
+        motorB.setSpeed(600);
+        motorC.setSpeed(600);
+        motorD.setSpeed(600);
 
         motorA.setAcceleration(100);
         motorB.setAcceleration(100);
         motorC.setAcceleration(100);
         motorD.setAcceleration(100);
-
-        Sound sound = Sound.getInstance();
-        sound.twoBeeps();
-
-        System.out.println("\n\n\n\n\nPress i midten to start");
-        sound.beep();
-        sound.twoBeeps();
     }
     public void moveForward() {
         motorA.synchronizeWith(new RegulatedMotor[]{motorB});

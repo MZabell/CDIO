@@ -4,9 +4,9 @@ import org.bytedeco.javacv.*;
 import org.bytedeco.opencv.opencv_core.*;
 import org.bytedeco.opencv.opencv_imgproc.Vec3fVector;
 import org.bytedeco.opencv.opencv_tracking.TrackerCSRT;
-import org.bytedeco.opencv.opencv_tracking.TrackerKCF;
 
 import javax.swing.*;
+import javax.swing.Timer;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.ArrayList;
@@ -29,12 +29,18 @@ public class ObjectRecog {
     private Rect lockZone;
     OpenCVFrameGrabber grabber;
 
-    public void setCommand(String command) {
-        support.firePropertyChange("Command", this.command, command);
-        this.command = command;
+    public void setCommandX(String commandX) {
+        support.firePropertyChange("CommandX", this.commandX, commandX);
+        this.commandX = commandX;
+    }
+    private String commandX;
+
+    public void setCommandY(String commandY) {
+        support.firePropertyChange("CommandY", this.commandY, commandY);
+        this.commandY = commandY;
     }
 
-    private String command;
+    private String commandY;
 
     public ObjectRecog() {
         grabber = new OpenCVFrameGrabber(System.getProperty("os.name").contains("Windows") ? CAP_DSHOW : 1);
@@ -48,6 +54,7 @@ public class ObjectRecog {
         ArrayList<TrackerCSRT> trackers = new ArrayList<>();
         ArrayList<TrackerCSRT> trackersToRemove = new ArrayList<>();
         ArrayList<DetectedObject> detectedObjects = new ArrayList<>();
+        MatVector contours = new MatVector();
         queue = new PriorityBlockingQueue<>(10, (o1, o2) -> {
             if (o1.getDistance() > o2.getDistance())
                 return 1;
@@ -61,11 +68,15 @@ public class ObjectRecog {
         canvas.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
 
+        Mat boundryMat = new Mat();
         Mat image;
         Mat gray = new Mat();
         Vec3fVector circles = new Vec3fVector();
         Mat lower = new Mat(1, 1, CV_8UC4, new Scalar(160, 180, 200, 0));
         Mat upper = new Mat(1, 1, CV_8UC4, new Scalar(240, 255, 255, 0));
+        Mat lowerRed = new Mat(new Scalar(0, 0, 150, 0));
+        Mat upperRed = new Mat(new Scalar(100, 100, 255, 0));
+        Scalar lowerScalar = new Scalar(160, 180, 200, 0);
         boolean isOverlapping = false;
 
         try {
@@ -74,6 +85,12 @@ public class ObjectRecog {
             Frame frame;
             while ((frame = grabber.grab()) != null) {
                 image = converter.convert(frame);
+
+
+                inRange(image, lowerRed, upperRed, boundryMat);
+                findContours(boundryMat, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+
+                //System.out.println(contours.size());
 
                 cvtColor(image, gray, CV_BGR2GRAY);
                 GaussianBlur(gray, gray, new Size(7, 7), 2);
@@ -120,9 +137,10 @@ public class ObjectRecog {
                 for (DetectedObject o : detectedObjects) {
                     boolean positive = trackers.get(detectedObjects.indexOf(o)).update(image, o.getRoi());
                     o.updateCircle(image);
-                    System.out.println(mean(o.getColor()));
-                    inRange(o.getColor(), lower, upper, o.getColor());
-                    if (positive && countNonZero(o.getColor()) > o.getRoi().area() * 0.95) {
+                    //System.out.println(mean(o.getColor()));
+
+                    //inRange(o.getColor(), lower, upper, o.getColor());
+                    if (positive && cmpScalar(mean(o.getColor()), lowerScalar)){
                         o.updateCircle(image);
                         putText(image, (int) o.getDistance() + " cm", o.getRoi().tl(), FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(255, 0, 0, 0));
                         circle(image, o.getCenter(), o.getRadius(), new Scalar(0, 255, 0, 0), 2, LINE_8, 0);
@@ -137,6 +155,17 @@ public class ObjectRecog {
 
                 rectangle(image, lockZone, new Scalar(0, 0, 255, 0));
 
+                //drawContours(image, contours, -1, new Scalar(255, 0, 0, 0));
+
+
+
+                if (contours.size() != 0) {
+                    if (countNonZero(new Mat(boundryMat, lockZone)) > 0) {
+                        checkBoundry();
+                    }
+                }
+                //System.out.println(roi.x() + " " + roi.y());
+
                 frame = converter.convert(image);
                 canvas.showImage(frame);
 
@@ -149,16 +178,48 @@ public class ObjectRecog {
 
     public void sendCommand(DetectedObject object) {
         if (object.getRoi().y() < lockZone.y()) {
-            setCommand("FORWARD");
+            setCommandY("FORWARD");
         } else if (object.getRoi().y() + object.getRoi().height() > lockZone.y() + lockZone.height()) {
-            setCommand("BACKWARD");
-        } else if (object.getRoi().x() < lockZone.x()) {
-            setCommand("LEFT");
-        } else if (object.getRoi().x() + object.getRoi().width() > lockZone.x() + lockZone.width()) {
-            setCommand("RIGHT");
+            setCommandY("BACKWARD");
         } else {
-            setCommand("STOP");
+            setCommandY("STOP");
         }
+
+        if (object.getRoi().x() < lockZone.x()) {
+            setCommandX("LEFT");
+        } else if (object.getRoi().x() + object.getRoi().width() > lockZone.x() + lockZone.width()) {
+            setCommandX("RIGHT");
+        } else {
+            setCommandX("STOP");
+        }
+    }
+
+    public boolean cmpScalar(Scalar s1, Scalar s2) {
+        return !(s1.blue() < s2.blue()) && !(s1.green() < s2.green()) && !(s1.red() < s2.red());
+    }
+
+    public void checkBoundry() {
+        System.out.println("Boundry breached " + queue.size());
+        queue.clear();
+        if (commandX.equals("LEFT")) {
+            setCommandX("RIGHT");
+        } else if (commandX.equals("RIGHT")) {
+            setCommandX("LEFT");
+        }
+    }
+
+    public void testRails() {
+        setCommandX("STOP");
+        setCommandY("BACKWARD");
+        Timer timer = new Timer(1000, e -> {
+            if (commandY.equals("FORWARD"))
+                setCommandY("BACKWARD");
+            else if (commandY.equals("BACKWARD")) {
+                setCommandY("FORWARD");
+            }
+        });
+        timer.setRepeats(true);
+        timer.start();
     }
 
     public void addPropertyChangeListener(PropertyChangeListener listener) {
