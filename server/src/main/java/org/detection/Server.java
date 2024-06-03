@@ -1,5 +1,6 @@
 package org.detection;
 
+import javax.swing.*;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.DataInputStream;
@@ -26,6 +27,8 @@ public class Server implements PropertyChangeListener {
     ArrayList<Thread> threads;
     int mode = 0;
 
+    DetectedObject object = null;
+
     public Server(ObjectRecog objectRecog) {
         this.objectRecog = objectRecog;
         outputStreams = new ArrayList<>();
@@ -43,6 +46,7 @@ public class Server implements PropertyChangeListener {
                     try {
                         out.writeUTF("STOP");
                     } catch (IOException e) {
+
                         throw new RuntimeException(e);
                     }
                 }
@@ -62,9 +66,10 @@ public class Server implements PropertyChangeListener {
                 outputStreams.get(mode).writeUTF(String.valueOf(mode));
                 mode++;
 
-                if (mode == 2) {
+                /*if (mode == 2) {
                     objectRecog.testRails();
-                }
+                }*/
+
                while (mode == 2) {
                    runClient();
                }
@@ -83,8 +88,17 @@ public class Server implements PropertyChangeListener {
             try {
                 if (Objects.equals(evt.getPropertyName(), "CommandY")) {
                     outputStreams.get(1).writeUTF(command);
-                } else {
+                } else if (Objects.equals(evt.getPropertyName(), "CommandX")) {
                     outputStreams.get(0).writeUTF(command);
+                } else {
+                    /*Timer timer = new Timer(3000, e -> {
+                        try {
+                            outputStreams.get(0).writeUTF("DOWN");
+                        } catch (IOException ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    });
+                    outputStreams.get(0).writeUTF(command);*/
                 }
 
             } catch (IOException e) {
@@ -95,15 +109,15 @@ public class Server implements PropertyChangeListener {
 
     private void runClient() {
 
-        DetectedObject object;
-
-        if (!objectRecog.getQueue().isEmpty()) {
-            object = objectRecog.getQueue().peek();
-            if (object == null) {
-                return;
-            }
-            objectRecog.sendCommand(object);
+        if (!objectRecog.getQueue().isEmpty() && objectRecog.isSearching()) {
+            object = objectRecog.getQueue().poll();
+            objectRecog.setSearching(false);
         }
+        if (object == null) {
+            objectRecog.setSearching(true);
+            return;
+        }
+        objectRecog.sendCommand(object);
 
     }
 }

@@ -18,17 +18,19 @@ public class Client {
 
     public Client(String IP) {
         try {
-            motorController = new MotorController();
             socket = new Socket(IP, 5000);
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
             mode = in.readUTF();
+            motorController = new MotorController(mode);
 
             switch (mode) {
                 case "0":
+                    System.out.println("Mode X");
                     modeX();
                     break;
                 case "1":
+                    System.out.println("Mode Y");
                     modeY();
                     break;
             }
@@ -36,7 +38,7 @@ public class Client {
             in.close();
             out.close();
             socket.close();
-        } catch (IOException e) {
+        } catch (Exception e) {
             motorController.stop();
             throw new RuntimeException(e);
         }
@@ -51,6 +53,18 @@ public class Client {
                     break;
                 case "RIGHT":
                     motorController.moveRight();
+                    break;
+                case "DOWN":
+                    motorController.moveDownControlled();
+                    break;
+                case "UP":
+                    motorController.moveUpControlled();
+                    break;
+                case "OPEN":
+                    motorController.openCollector();
+                    break;
+                case "CLOSE":
+                    motorController.closeCollector();
                     break;
                 default:
                     motorController.stop();
@@ -68,6 +82,9 @@ public class Client {
                     break;
                 case "BACKWARD":
                     motorController.moveBackward();
+                    break;
+                case "FORWARDCTRLD":
+                    motorController.moveForwardControlled();
                     break;
                 default:
                     motorController.stop();

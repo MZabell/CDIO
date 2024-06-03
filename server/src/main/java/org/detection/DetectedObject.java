@@ -40,11 +40,18 @@ public class DetectedObject {
 
     private double distance;
 
-    public DetectedObject(Rect roi, Point center, int radius, Mat color) {
+    public int getIndex() {
+        return index;
+    }
+
+    private int index;
+
+    public DetectedObject(Rect roi, Point center, int radius, Mat color, int index) {
         this.roi = roi;
         this.center = center;
         this.radius = radius;
         this.color = color;
+        this.index = index;
     }
 
     public void updateCircle(Mat image) {

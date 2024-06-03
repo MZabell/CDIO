@@ -10,6 +10,7 @@ import javax.swing.Timer;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.ArrayList;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
 
 import static org.bytedeco.opencv.global.opencv_core.*;
@@ -19,13 +20,13 @@ import static org.bytedeco.opencv.global.opencv_videoio.CAP_DSHOW;
 
 public class ObjectRecog {
 
-    public PriorityBlockingQueue<DetectedObject> getQueue() {
+    public ArrayBlockingQueue<DetectedObject> getQueue() {
         return queue;
     }
 
     private final PropertyChangeSupport support;
 
-    private PriorityBlockingQueue<DetectedObject> queue;
+    private ArrayBlockingQueue<DetectedObject> queue;
     private Rect lockZone;
     OpenCVFrameGrabber grabber;
 
@@ -42,26 +43,70 @@ public class ObjectRecog {
 
     private String commandY;
 
+    public void setCommandZ(String commandZ) {
+        support.firePropertyChange("CommandZ", this.commandZ, commandZ);
+        this.commandZ = commandZ;
+    }
+
+    private String commandZ;
+
+    public boolean isLocked() {
+        return isLocked;
+    }
+
+    private boolean isLocked = false;
+
+    public boolean isSearching() {
+        return isSearching;
+    }
+
+    public void setSearching(boolean searching) {
+        isSearching = searching;
+    }
+
+    private boolean isSearching = true;
+
+    Timer lock;
+
+    Timer unlock;
+
+    int index = 0;
+
     public ObjectRecog() {
-        grabber = new OpenCVFrameGrabber(System.getProperty("os.name").contains("Windows") ? CAP_DSHOW : 1);
+        grabber = new OpenCVFrameGrabber(0);
         support = new PropertyChangeSupport(this);
+        lock = new Timer(5000, e -> {
+            setCommandX("DOWN");
+        });
+        unlock = new Timer(10000, e -> {
+            setCommandX("TEST");
+            isLocked = false;
+            System.out.println("UNLOCKED");
+            System.out.println(queue.size());
+            isSearching = true;
+        });
+
+        lock.setRepeats(false);
+        unlock.setRepeats(false);
     }
 
     void scan() {
 
         TrackerCSRT.Params params = new TrackerCSRT.Params();
-        params.psr_threshold(0.2f);
+        params.psr_threshold(0.05f);
         ArrayList<TrackerCSRT> trackers = new ArrayList<>();
         ArrayList<TrackerCSRT> trackersToRemove = new ArrayList<>();
         ArrayList<DetectedObject> detectedObjects = new ArrayList<>();
         MatVector contours = new MatVector();
-        queue = new PriorityBlockingQueue<>(10, (o1, o2) -> {
-            if (o1.getDistance() > o2.getDistance())
+        /*queue = new PriorityBlockingQueue<>(10, (o1, o2) -> {
+            if (o1.getIndex() < o2.getIndex())
                 return 1;
-            else if (o1.getDistance() < o2.getDistance())
+            else if (o1.getIndex() > o2.getIndex())
                 return -1;
             return 0;
-        });
+        });*/
+        //queue = new PriorityBlockingQueue<>(10);
+        queue = new ArrayBlockingQueue<>(10);
         ArrayList<DetectedObject> objectsToRemove = new ArrayList<>();
 
         CanvasFrame canvas = new CanvasFrame("Object Detection", CanvasFrame.getDefaultGamma() / grabber.getGamma());
@@ -81,7 +126,7 @@ public class ObjectRecog {
 
         try {
             grabber.start();
-            lockZone = new Rect(grabber.getImageWidth() / 2 - 50, grabber.getImageHeight() / 2 - 50, 70, 70);
+            lockZone = new Rect(grabber.getImageWidth() / 2 - 20, grabber.getImageHeight() / 2 - 50, 70, 70);
             Frame frame;
             while ((frame = grabber.grab()) != null) {
                 image = converter.convert(frame);
@@ -126,12 +171,13 @@ public class ObjectRecog {
                     //System.out.println(mean(color));
                     inRange(color, lower, upper, color);
                     if (countNonZero(color) > 300) {
-                        DetectedObject object = new DetectedObject(roi, center, radius, color);
-                        detectedObjects.add(object);
-                        queue.add(object);
-                        TrackerCSRT tracker = TrackerCSRT.create(params);
-                        tracker.init(image, roi);
-                        trackers.add(tracker);
+                        DetectedObject object = new DetectedObject(roi, center, radius, color, index++);
+                        if (queue.offer(object)) {
+                            detectedObjects.add(object);
+                            TrackerCSRT tracker = TrackerCSRT.create(params);
+                            tracker.init(image, roi);
+                            trackers.add(tracker);
+                        }
                     }
                 }
                 for (DetectedObject o : detectedObjects) {
@@ -150,8 +196,9 @@ public class ObjectRecog {
                     }
                 }
 
-                trackers.removeAll(trackersToRemove);
-                detectedObjects.removeAll(objectsToRemove);
+                //trackers.removeAll(trackersToRemove);
+                //detectedObjects.removeAll(objectsToRemove);
+                //queue.removeAll(objectsToRemove);
 
                 rectangle(image, lockZone, new Scalar(0, 0, 255, 0));
 
@@ -168,6 +215,8 @@ public class ObjectRecog {
 
                 frame = converter.convert(image);
                 canvas.showImage(frame);
+                //if (queue.peek() != null)
+                  //  System.out.println(queue.peek().getRoi().x());
 
             }
             grabber.stop();
@@ -177,21 +226,36 @@ public class ObjectRecog {
     }
 
     public void sendCommand(DetectedObject object) {
-        if (object.getRoi().y() < lockZone.y()) {
-            setCommandY("FORWARD");
-        } else if (object.getRoi().y() + object.getRoi().height() > lockZone.y() + lockZone.height()) {
-            setCommandY("BACKWARD");
-        } else {
-            setCommandY("STOP");
+        if (!isLocked) {
+            if (object.getRoi().y() < lockZone.y()) {
+                setCommandY("FORWARD");
+            } else if (object.getRoi().y() + object.getRoi().height() > lockZone.y() + lockZone.height()) {
+                setCommandY("BACKWARD");
+            } else {
+                setCommandY("STOP");
+            }
+
+            if (object.getRoi().x() < lockZone.x()) {
+                setCommandX("LEFT");
+            } else if (object.getRoi().x() + object.getRoi().width() > lockZone.x() + lockZone.width()) {
+                setCommandX("RIGHT");
+            } else {
+                setCommandX("STOP");
+            }
+
+
+            if (commandX.equals("STOP") && commandY.equals("STOP")) {
+                //setCommandX("OPEN");
+                isLocked = true;
+                System.out.println("LOCKED");
+                setCommandY("FORWARDCTRLD");
+
+                lock.restart();
+                unlock.restart();
+            }
         }
 
-        if (object.getRoi().x() < lockZone.x()) {
-            setCommandX("LEFT");
-        } else if (object.getRoi().x() + object.getRoi().width() > lockZone.x() + lockZone.width()) {
-            setCommandX("RIGHT");
-        } else {
-            setCommandX("STOP");
-        }
+
     }
 
     public boolean cmpScalar(Scalar s1, Scalar s2) {
@@ -209,9 +273,9 @@ public class ObjectRecog {
     }
 
     public void testRails() {
-        setCommandX("STOP");
-        setCommandY("BACKWARD");
-        Timer timer = new Timer(1000, e -> {
+        setCommandY("STOP");
+        setCommandY("FORWARD");
+        Timer timer = new Timer(4000, e -> {
             if (commandY.equals("FORWARD"))
                 setCommandY("BACKWARD");
             else if (commandY.equals("BACKWARD")) {
