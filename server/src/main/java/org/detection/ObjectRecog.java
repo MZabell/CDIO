@@ -12,6 +12,7 @@ import javax.swing.Timer;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.ArrayList;
+import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
 
@@ -36,14 +37,14 @@ public class ObjectRecog {
         support.firePropertyChange("CommandX", this.commandX, commandX);
         this.commandX = commandX;
     }
-    private String commandX;
+    private String commandX = "";
 
     public void setCommandY(String commandY) {
         support.firePropertyChange("CommandY", this.commandY, commandY);
         this.commandY = commandY;
     }
 
-    private String commandY;
+    private String commandY = "";
 
     public void setCommandZ(String commandZ) {
         support.firePropertyChange("CommandZ", this.commandZ, commandZ);
@@ -118,8 +119,19 @@ public class ObjectRecog {
 
             @Override
             public void move(ObjectRecog o) {
-                o.setCommandY("STOP");
-                o.setCommandX("LEFT");
+                try {
+                    synchronized (o) {
+                        if (previousState == SearchForward)
+                            o.setCommandY("BACKWARD");
+                        else o.setCommandY("FORWARD");
+                        o.wait(500);
+                        o.setCommandY("STOP");
+                        o.setCommandX("LEFT");
+                        o.wait(1000);
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
         },
         SearchRight {
@@ -133,25 +145,47 @@ public class ObjectRecog {
 
             @Override
             public void move(ObjectRecog o) {
-                o.setCommandY("STOP");
-                o.setCommandX("RIGHT");
+                try {
+                    synchronized (o) {
+                        if (previousState == SearchForward)
+                            o.setCommandY("BACKWARD");
+                        else o.setCommandY("FORWARD");
+                        o.wait(500);
+                        o.setCommandY("STOP");
+                        o.setCommandX("RIGHT");
+                        o.wait(1000);
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
         },
         //SearchGoal {};
         SearchWait {
             @Override
             public SearchState nextState() {
-                return SearchForward;
+                return Objects.requireNonNullElse(previousState, SearchForward);
+            }
+
+            @Override
+            public void move(ObjectRecog o) {}
+        },
+        SearchDone {
+            @Override
+            public SearchState nextState() {
+                return null;
             }
 
             @Override
             public void move(ObjectRecog o) {
-                o.setCommandY("STOP");
-                o.setCommandX("STOP");
             }
         };
 
         public SearchState previousState = null;
+        public SearchState pauseSearch() {
+            previousState = this;
+            return SearchWait;
+        }
         public abstract SearchState nextState();
         public abstract void move(ObjectRecog o);
     }
@@ -174,6 +208,8 @@ public class ObjectRecog {
 
             @Override
             public void move(ObjectRecog o, DetectedObject object) {
+                if (object == null)
+                    return;
                 if (object.getRoi().y() < lockZone.y()) {
                     o.setCommandY("FORWARD");
                 } else if (object.getRoi().y() + object.getRoi().height() > lockZone.y() + lockZone.height()) {
@@ -199,7 +235,16 @@ public class ObjectRecog {
 
             @Override
             public void move(ObjectRecog o, DetectedObject object) {
-                o.setCommandY("FORWARDCTRLD");
+                try {
+                    synchronized (o) {
+                        o.setCommandY("FORWARDCTRLD");
+                        o.wait(2000);
+                        o.setCommandX("DOWN");
+                        o.wait(3000);
+                    }
+                    } catch(InterruptedException e){
+                        e.printStackTrace();
+                    }
             }
         },
         Done {
@@ -225,6 +270,8 @@ public class ObjectRecog {
     Timer unlock;
 
     int index = 0;
+    Mat boundryMat;
+    MatVector contours;
 
     public ObjectRecog() {
         directionX = DirectionX.STOP;
@@ -253,7 +300,7 @@ public class ObjectRecog {
         ArrayList<TrackerKCF> trackers = new ArrayList<>();
         ArrayList<TrackerKCF> trackersToRemove = new ArrayList<>();
         ArrayList<DetectedObject> detectedObjects = new ArrayList<>();
-        MatVector contours = new MatVector();
+        contours = new MatVector();
         /*queue = new PriorityBlockingQueue<>(10, (o1, o2) -> {
             if (o1.getIndex() < o2.getIndex())
                 return 1;
@@ -269,7 +316,7 @@ public class ObjectRecog {
         canvas.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
 
-        Mat boundryMat = new Mat();
+        boundryMat = new Mat();
         Mat image;
         Mat gray = new Mat();
         Vec3fVector circles = new Vec3fVector();
@@ -363,12 +410,7 @@ public class ObjectRecog {
 
 
 
-                if (contours.size() != 0) {
-                    if (countNonZero(new Mat(boundryMat, lockZone)) > 0 && !test) {
-                        checkBoundry();
-                        test = true;
-                    }
-                }
+
                 //System.out.println(roi.x() + " " + roi.y());
 
                 frame = converter.convert(image);
@@ -380,6 +422,64 @@ public class ObjectRecog {
             grabber.stop();
         } catch (FrameGrabber.Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    public void start() {
+        SearchState searchState = SearchState.SearchWait;
+        CollectState collectState = CollectState.NotFound;
+        int trips = 0;
+
+        while (searchState != SearchState.SearchDone) {
+            //System.out.println(searchState + " " + collectState);
+            switch (collectState) {
+                case NotFound:
+                    if (!queue.isEmpty()) {
+                        collectState = collectState.nextState();
+                        searchState = searchState.pauseSearch();
+                    } else if (searchState == SearchState.SearchWait) {
+                        searchState = searchState.nextState();
+                        break;
+                    } else break;
+                case Found:
+                    if (commandX.equals("STOP") && commandY.equals("STOP")) {
+                        collectState = collectState.nextState();
+                    } else {
+                        collectState.move(this, queue.peek());
+                        break;
+                    }
+                case Engaged:
+                    collectState.move(this, queue.peek());
+                    collectState = collectState.nextState();
+                case Done:
+                    collectState = collectState.nextState();
+                    searchState = searchState.nextState();
+                    break;
+            }
+
+            switch (searchState) {
+                case SearchWait:
+                    break;
+                case SearchForward:
+                case SearchBackward:
+                    if (checkBoundry()) {
+                        System.out.println("Boundry breached");
+                        trips++;
+                        searchState = searchState.nextState();
+                    } else {
+                        searchState.move(this);
+                        break;
+                    }
+                case SearchLeft:
+                case SearchRight:
+                    searchState.move(this);
+                    searchState = searchState.nextState();
+                    break;
+            }
+
+            /*if (trips == 3) {
+                searchState = SearchState.SearchDone;
+            }*/
         }
     }
 
@@ -445,17 +545,8 @@ public class ObjectRecog {
         return !(s1.blue() < s2.blue()) && !(s1.green() < s2.green()) && !(s1.red() < s2.red());
     }
 
-    public void checkBoundry() {
-        System.out.println("Boundry breached " + queue.size());
-        queue.clear();
-        switch (directionY) {
-            case FORWARD:
-                directionY = DirectionY.BACKWARD;
-                break;
-            case BACKWARD:
-                directionY = DirectionY.FORWARD;
-                break;
-        }
+    public boolean checkBoundry() {
+        return (contours.size() != 0 && countNonZero(new Mat(boundryMat, lockZone)) > 0);
     }
 
     public void testRails() {

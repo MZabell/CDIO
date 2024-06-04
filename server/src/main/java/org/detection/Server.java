@@ -71,7 +71,7 @@ public class Server implements PropertyChangeListener {
                 }*/
 
                while (mode == 2) {
-                   runClient();
+                   objectRecog.start();
                }
 
             }
