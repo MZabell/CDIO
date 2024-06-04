@@ -110,12 +110,11 @@ public class Server implements PropertyChangeListener {
     private void runClient() {
 
         if (!objectRecog.getQueue().isEmpty() && objectRecog.isSearching()) {
-            object = objectRecog.getQueue().poll();
+            object = objectRecog.getQueue().peek();
             objectRecog.setSearching(false);
         }
         if (object == null) {
             objectRecog.setSearching(true);
-            return;
         }
         objectRecog.sendCommand(object);
 

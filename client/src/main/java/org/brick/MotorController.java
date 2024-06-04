@@ -15,7 +15,7 @@ public class MotorController {
     private String mode;
 
     static final int speed = 300;
-    static final int acc = 100;
+    static final int acc = 50;
     public MotorController(String mode) {
 
         this.mode = mode;
