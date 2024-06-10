@@ -70,7 +70,7 @@ public class Server implements PropertyChangeListener {
                     objectRecog.testRails();
                 }*/
 
-               while (mode == 2) {
+               if (mode == 2) {
                    objectRecog.start();
                }
 

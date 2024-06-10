@@ -23,14 +23,18 @@ import static org.bytedeco.opencv.global.opencv_videoio.CAP_DSHOW;
 
 public class ObjectRecog {
 
-    public ArrayBlockingQueue<DetectedObject> getQueue() {
+    public PriorityBlockingQueue<DetectedObject> getQueue() {
         return queue;
     }
 
     private final PropertyChangeSupport support;
 
-    private ArrayBlockingQueue<DetectedObject> queue;
+    private PriorityBlockingQueue<DetectedObject> queue;
     private static Rect lockZone;
+    private static Rect edgeUp;
+    private static Rect edgeDown;
+    private static Rect edgeLeft;
+    private static Rect edgeRight;
     OpenCVFrameGrabber grabber;
 
     public void setCommandX(String commandX) {
@@ -85,7 +89,8 @@ public class ObjectRecog {
         SearchForward {
             @Override
             public SearchState nextState() {
-                previousState = this;
+                previousState = SearchForward;
+                //System.out.println(previousState);
                 return SearchLeft;
             }
 
@@ -98,7 +103,7 @@ public class ObjectRecog {
         SearchBackward {
             @Override
             public SearchState nextState() {
-                previousState = this;
+                previousState = SearchBackward;
                 return SearchLeft;
             }
 
@@ -111,8 +116,10 @@ public class ObjectRecog {
         SearchLeft {
             @Override
             public SearchState nextState() {
+                System.out.println(previousState);
                 if (previousState == SearchForward) {
-                    previousState = this;
+                    System.out.println("Going back");
+                    previousState = SearchLeft;
                     return SearchBackward;
                 } else return SearchForward;
             }
@@ -121,8 +128,9 @@ public class ObjectRecog {
             public void move(ObjectRecog o) {
                 try {
                     synchronized (o) {
-                        if (previousState == SearchForward)
+                        if (previousState == SearchForward) {
                             o.setCommandY("BACKWARD");
+                        }
                         else o.setCommandY("FORWARD");
                         o.wait(500);
                         o.setCommandY("STOP");
@@ -138,7 +146,7 @@ public class ObjectRecog {
             @Override
             public SearchState nextState() {
                 if (previousState == SearchForward) {
-                    previousState = this;
+                    previousState = SearchRight;
                     return SearchBackward;
                 } else return SearchForward;
             }
@@ -178,12 +186,35 @@ public class ObjectRecog {
 
             @Override
             public void move(ObjectRecog o) {
+                o.setCommandX("LEFTCTRLD");
+                o.setCommandY("FORWARDCTRLD2");
+            }
+        },
+        SearchGoal {
+            @Override
+            public SearchState nextState() {
+                return SearchDone;
+            }
+
+            @Override
+            public void move(ObjectRecog o) {
+                if (o.checkBoundry(edgeRight)) {
+                    o.setCommandX("STOP");
+                } else if (!Objects.equals(o.commandX, "STOP")) {
+                    o.setCommandX("RIGHT");
+                }
+
+                if (o.checkBoundry(edgeDown)) {
+                    o.setCommandY("STOP");
+                } else if (!Objects.equals(o.commandY, "STOP")){
+                    o.setCommandY("BACKWARD");
+                }
             }
         };
 
-        public SearchState previousState = null;
+        public static SearchState previousState = null;
         public SearchState pauseSearch() {
-            previousState = this;
+            //previousState = this;
             return SearchWait;
         }
         public abstract SearchState nextState();
@@ -272,6 +303,8 @@ public class ObjectRecog {
     int index = 0;
     Mat boundryMat;
     MatVector contours;
+    ArrayList<DetectedObject> detectedObjects;
+    ArrayList<TrackerKCF> trackers;
 
     public ObjectRecog() {
         directionX = DirectionX.STOP;
@@ -297,9 +330,9 @@ public class ObjectRecog {
 
         TrackerKCF.Params params = new TrackerKCF.Params();
 
-        ArrayList<TrackerKCF> trackers = new ArrayList<>();
+        trackers = new ArrayList<>();
         ArrayList<TrackerKCF> trackersToRemove = new ArrayList<>();
-        ArrayList<DetectedObject> detectedObjects = new ArrayList<>();
+        detectedObjects = new ArrayList<>();
         contours = new MatVector();
         /*queue = new PriorityBlockingQueue<>(10, (o1, o2) -> {
             if (o1.getIndex() < o2.getIndex())
@@ -309,7 +342,13 @@ public class ObjectRecog {
             return 0;
         });*/
         //queue = new PriorityBlockingQueue<>(10);
-        queue = new ArrayBlockingQueue<>(10);
+        queue = new PriorityBlockingQueue<>(10, (o1, o2) -> {
+            if (distance(o1.getCenter(), lockZone.tl()) > distance(o2.getCenter(), lockZone.tl()))
+                return 1;
+            else if (distance(o1.getCenter(), lockZone.tl()) < distance(o2.getCenter(), lockZone.tl()))
+                return -1;
+            return 0;
+        });
         ArrayList<DetectedObject> objectsToRemove = new ArrayList<>();
 
         CanvasFrame canvas = new CanvasFrame("Object Detection", CanvasFrame.getDefaultGamma() / grabber.getGamma());
@@ -322,14 +361,19 @@ public class ObjectRecog {
         Vec3fVector circles = new Vec3fVector();
         Mat lower = new Mat(1, 1, CV_8UC4, new Scalar(160, 180, 200, 0));
         Mat upper = new Mat(1, 1, CV_8UC4, new Scalar(240, 255, 255, 0));
-        Mat lowerRed = new Mat(new Scalar(0, 0, 150, 0));
+        Mat lowerRed = new Mat(new Scalar(0, 0, 130, 0));
         Mat upperRed = new Mat(new Scalar(100, 100, 255, 0));
-        Scalar lowerScalar = new Scalar(160, 180, 200, 0);
+        Scalar lowerScalar = new Scalar(140, 140, 140, 0);
+        //Scalar lowerScalar = new Scalar(255, 255, 255, 0);
         boolean isOverlapping = false;
 
         try {
             grabber.start();
-            lockZone = new Rect(grabber.getImageWidth() / 2 - 20, grabber.getImageHeight() / 2 - 50, 70, 70);
+            lockZone = new Rect(grabber.getImageWidth() / 2 - 20, grabber.getImageHeight() / 2 - 50, 60, 60);
+            edgeUp = new Rect(lockZone.x() + lockZone.width() / 2 - 5, lockZone.y() - 50, 10, 50);
+            edgeDown = new Rect(lockZone.x() + lockZone.width() / 2 - 5, lockZone.y() + lockZone.height(), 10, 50);
+            edgeLeft = new Rect(lockZone.x() - 50, lockZone.y() + lockZone.height() / 2 - 5, 50, 10);
+            edgeRight = new Rect(lockZone.x() + lockZone.width(), lockZone.y() + lockZone.height() / 2 - 5, 50, 10);
             Frame frame;
             while ((frame = grabber.grab()) != null) {
                 image = converter.convert(frame);
@@ -374,6 +418,7 @@ public class ObjectRecog {
                     //System.out.println(mean(color));
                     //inRange(color, lower, upper, color);
                     if (cmpScalar(mean(color), lowerScalar)) {
+                        //System.out.println("Object detected");
                         DetectedObject object = new DetectedObject(roi, center, radius, color, index++);
                         if (queue.offer(object)) {
                             detectedObjects.add(object);
@@ -393,7 +438,10 @@ public class ObjectRecog {
                     if (positive && cmpScalar(mean(o.getColor()), lowerScalar)){
                         o.updateCircle(image);
                         putText(image, (int) o.getDistance() + " cm", o.getRoi().tl(), FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(255, 0, 0, 0));
-                        circle(image, o.getCenter(), o.getRadius(), new Scalar(0, 255, 0, 0), 2, LINE_8, 0);
+                        if (queue.peek() == o)
+                            circle(image, o.getCenter(), o.getRadius(), new Scalar(0, 0, 255, 0), 2, LINE_8, 0);
+                        else
+                            circle(image, o.getCenter(), o.getRadius(), new Scalar(0, 255, 0, 0), 2, LINE_8, 0);
                     } else {
                         trackersToRemove.add(trackers.get(detectedObjects.indexOf(o)));
                         objectsToRemove.add(o);
@@ -405,10 +453,23 @@ public class ObjectRecog {
                 queue.removeAll(objectsToRemove);
 
                 rectangle(image, lockZone, new Scalar(0, 0, 255, 0));
+                rectangle(image, edgeUp, new Scalar(0, 0, 255, 0));
+                rectangle(image, edgeDown, new Scalar(0, 0, 255, 0));
+                rectangle(image, edgeLeft, new Scalar(0, 0, 255, 0));
+                rectangle(image, edgeRight, new Scalar(0, 0, 255, 0));
 
                 //drawContours(image, contours, -1, new Scalar(255, 0, 0, 0));
 
+                /*if (checkBoundry(edgeUp)) {
+                    //System.out.println("Boundry breached");
+                    //queue.clear();
+                    //detectedObjects.clear();
+                    //trackers.clear();
+                }*/
 
+                /*if (checkBoundry(edgeDown)) {
+                    System.out.println("Boundry breached");
+                }*/
 
 
                 //System.out.println(roi.x() + " " + roi.y());
@@ -430,11 +491,11 @@ public class ObjectRecog {
         CollectState collectState = CollectState.NotFound;
         int trips = 0;
 
-        while (searchState != SearchState.SearchDone) {
+        while (searchState != null) {
             //System.out.println(searchState + " " + collectState);
             switch (collectState) {
                 case NotFound:
-                    if (!queue.isEmpty()) {
+                    if (!queue.isEmpty() && trips < 3) {
                         collectState = collectState.nextState();
                         searchState = searchState.pauseSearch();
                     } else if (searchState == SearchState.SearchWait) {
@@ -452,8 +513,16 @@ public class ObjectRecog {
                     collectState.move(this, queue.peek());
                     collectState = collectState.nextState();
                 case Done:
+                    queue.clear();
+                    //detectedObjects.clear();
+                    //trackers.clear();
                     collectState = collectState.nextState();
                     searchState = searchState.nextState();
+                    System.out.println(collectState);
+                    System.out.println(searchState);
+                    if (++trips == 3) {
+                        searchState = SearchState.SearchGoal;
+                    }
                     break;
             }
 
@@ -461,19 +530,41 @@ public class ObjectRecog {
                 case SearchWait:
                     break;
                 case SearchForward:
-                case SearchBackward:
-                    if (checkBoundry()) {
-                        System.out.println("Boundry breached");
+                    if (checkBoundry(edgeUp)) {
+                        System.out.println("Boundry breached UP");
                         trips++;
                         searchState = searchState.nextState();
                     } else {
                         searchState.move(this);
-                        break;
                     }
+                    break;
+                case SearchBackward:
+                    if (checkBoundry(edgeDown)) {
+                        System.out.println("Boundry breached DOWN");
+                        trips++;
+                        searchState = searchState.nextState();
+                    } else {
+                        searchState.move(this);
+                    }
+                    break;
                 case SearchLeft:
                 case SearchRight:
                     searchState.move(this);
                     searchState = searchState.nextState();
+                    break;
+                case SearchGoal:
+                    searchState.move(this);
+                    if (Objects.equals(commandY, "STOP") && Objects.equals(commandX, "STOP")) {
+                        System.out.println("Goal reached");
+                        searchState = searchState.nextState();
+                    }
+                    break;
+                case SearchDone:
+                    searchState.move(this);
+                    System.out.println("Search done");
+                    searchState = searchState.nextState();
+                    break;
+                default:
                     break;
             }
 
@@ -545,8 +636,13 @@ public class ObjectRecog {
         return !(s1.blue() < s2.blue()) && !(s1.green() < s2.green()) && !(s1.red() < s2.red());
     }
 
-    public boolean checkBoundry() {
-        return (contours.size() != 0 && countNonZero(new Mat(boundryMat, lockZone)) > 0);
+    public double distance(Point p1, Point p2) {
+        double dist = Math.sqrt(Math.pow(p2.x() - p1.x(), 2) + Math.pow(p2.y() - p1.y(), 2));
+        return dist;
+    }
+
+    public boolean checkBoundry(Rect zone) {
+        return (contours.size() != 0 && countNonZero(new Mat(boundryMat, zone)) > 0);
     }
 
     public void testRails() {

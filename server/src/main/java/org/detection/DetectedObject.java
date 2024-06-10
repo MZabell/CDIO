@@ -58,7 +58,7 @@ public class DetectedObject {
         center = new Point(roi.x() + roi.width() / 2, roi.y() + roi.height() / 2);
         radius = roi.width() / 2;
 
-        distance = (3.5 * 545) / (radius * 2);
+        distance = (4.0 * 545) / (radius * 2);
 
         try {
             color = new Mat(roi.size(), CV_8UC3, mean(new Mat(image, roi)));

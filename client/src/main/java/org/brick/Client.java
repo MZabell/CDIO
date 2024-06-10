@@ -66,6 +66,9 @@ public class Client {
                 case "CLOSE":
                     motorController.closeCollector();
                     break;
+                case "LEFTCTRLD":
+                    motorController.moveLeftControlled();
+                    break;
                 default:
                     motorController.stop();
                     break;
@@ -85,6 +88,9 @@ public class Client {
                     break;
                 case "FORWARDCTRLD":
                     motorController.moveForwardControlled();
+                    break;
+                case "FORWARDCTRLD2":
+                    motorController.moveForwardControlled2();
                     break;
                 default:
                     motorController.stop();
