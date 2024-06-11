@@ -35,6 +35,7 @@ public class ObjectRecog {
     private static Rect edgeDown;
     private static Rect edgeLeft;
     private static Rect edgeRight;
+    private Mat upMat, downMat, leftMat, rightMat;
     OpenCVFrameGrabber grabber;
 
     public void setCommandX(String commandX) {
@@ -186,8 +187,17 @@ public class ObjectRecog {
 
             @Override
             public void move(ObjectRecog o) {
-                o.setCommandX("LEFTCTRLD");
-                o.setCommandY("FORWARDCTRLD2");
+                try {
+                    synchronized (o) {
+                        o.setCommandX("LEFTCTRLD");
+                        o.setCommandY("FORWARDCTRLD2");
+                        o.wait(5000);
+                        o.setCommandX("CLOSE");
+                        o.wait(3000);
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
         },
         SearchGoal {
@@ -198,13 +208,13 @@ public class ObjectRecog {
 
             @Override
             public void move(ObjectRecog o) {
-                if (o.checkBoundry(edgeRight)) {
+                if (o.checkBoundry(o.rightMat)) {
                     o.setCommandX("STOP");
                 } else if (!Objects.equals(o.commandX, "STOP")) {
                     o.setCommandX("RIGHT");
                 }
 
-                if (o.checkBoundry(edgeDown)) {
+                if (o.checkBoundry(o.downMat)) {
                     o.setCommandY("STOP");
                 } else if (!Objects.equals(o.commandY, "STOP")){
                     o.setCommandY("BACKWARD");
@@ -286,6 +296,17 @@ public class ObjectRecog {
 
             @Override
             public void move(ObjectRecog o, DetectedObject object) {}
+        },
+
+        Reset {
+            @Override
+            public CollectState nextState() {
+                return NotFound;
+            }
+
+            @Override
+            public void move(ObjectRecog o, DetectedObject object) {
+            }
         };
 
         public abstract CollectState nextState();
@@ -294,7 +315,7 @@ public class ObjectRecog {
 
     DirectionX directionX;
     DirectionY directionY;
-    private boolean test = false;
+    //private boolean test = false;
 
     Timer lock;
 
@@ -305,6 +326,7 @@ public class ObjectRecog {
     MatVector contours;
     ArrayList<DetectedObject> detectedObjects;
     ArrayList<TrackerKCF> trackers;
+    Mat test = null;
 
     public ObjectRecog() {
         directionX = DirectionX.STOP;
@@ -371,13 +393,12 @@ public class ObjectRecog {
             grabber.start();
             lockZone = new Rect(grabber.getImageWidth() / 2 - 20, grabber.getImageHeight() / 2 - 50, 60, 60);
             edgeUp = new Rect(lockZone.x() + lockZone.width() / 2 - 5, lockZone.y() - 50, 10, 50);
-            edgeDown = new Rect(lockZone.x() + lockZone.width() / 2 - 5, lockZone.y() + lockZone.height(), 10, 50);
+            edgeDown = new Rect(lockZone.x() - 50, lockZone.y() + lockZone.height(), 160, 50);
             edgeLeft = new Rect(lockZone.x() - 50, lockZone.y() + lockZone.height() / 2 - 5, 50, 10);
             edgeRight = new Rect(lockZone.x() + lockZone.width(), lockZone.y() + lockZone.height() / 2 - 5, 50, 10);
             Frame frame;
             while ((frame = grabber.grab()) != null) {
                 image = converter.convert(frame);
-
 
                 inRange(image, lowerRed, upperRed, boundryMat);
                 findContours(boundryMat, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
@@ -387,7 +408,9 @@ public class ObjectRecog {
                 cvtColor(image, gray, CV_BGR2GRAY);
                 GaussianBlur(gray, gray, new Size(7, 7), 2);
 
+                //System.out.println("Hough");
                 HoughCircles(gray, circles, HOUGH_GRADIENT, 1, 20, 200, 40, 1, 40);
+                //System.out.println("Hough done");
                 for (int i = 0; i < (int) circles.size(); i++) {
                     Point3f circle = circles.get(i);
                     Point center = new Point(Math.round(circle.get(0)), Math.round(circle.get(1)));
@@ -484,11 +507,16 @@ public class ObjectRecog {
         } catch (FrameGrabber.Exception e) {
             e.printStackTrace();
         }
+        System.out.println("Scan stopped");
     }
 
     public void start() {
-        SearchState searchState = SearchState.SearchWait;
+        SearchState searchState = SearchState.SearchForward;
         CollectState collectState = CollectState.NotFound;
+        upMat = boundryMat.apply(edgeUp);
+        downMat = boundryMat.apply(edgeDown);
+        leftMat = boundryMat.apply(edgeLeft);
+        rightMat = boundryMat.apply(edgeRight);
         int trips = 0;
 
         while (searchState != null) {
@@ -530,7 +558,7 @@ public class ObjectRecog {
                 case SearchWait:
                     break;
                 case SearchForward:
-                    if (checkBoundry(edgeUp)) {
+                    if (checkBoundry(upMat)) {
                         System.out.println("Boundry breached UP");
                         trips++;
                         searchState = searchState.nextState();
@@ -539,7 +567,7 @@ public class ObjectRecog {
                     }
                     break;
                 case SearchBackward:
-                    if (checkBoundry(edgeDown)) {
+                    if (checkBoundry(downMat)) {
                         System.out.println("Boundry breached DOWN");
                         trips++;
                         searchState = searchState.nextState();
@@ -641,8 +669,8 @@ public class ObjectRecog {
         return dist;
     }
 
-    public boolean checkBoundry(Rect zone) {
-        return (contours.size() != 0 && countNonZero(new Mat(boundryMat, zone)) > 0);
+    public boolean checkBoundry(Mat zoneMat) {
+        return (contours.size() != 0 && countNonZero(zoneMat) > 0);
     }
 
     public void testRails() {
