@@ -11,6 +11,10 @@ public class Client {
     DataInputStream in;
     DataOutputStream out;
     String message;
+    String[] splitMessage;
+    int speed;
+
+    Thread tachoThread;
 
     MotorController motorController;
 
@@ -21,7 +25,9 @@ public class Client {
             socket = new Socket(IP, 5000);
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
+            tachoThread = new Thread(this::sendTacho);
             mode = in.readUTF();
+            //mode = "1";
             motorController = new MotorController(mode);
 
             switch (mode) {
@@ -40,25 +46,32 @@ public class Client {
             socket.close();
         } catch (Exception e) {
             motorController.stop();
-            throw new RuntimeException(e);
+            System.out.println("Client disconnected");
         }
     }
 
     private void modeX() throws IOException {
+        out.writeUTF("READY");
         while (!(message = in.readUTF()).equals("EXIT")) {
-            System.out.println("Received message: " + message);
-            switch (message) {
+            //out.writeUTF(String.valueOf(motorController.getTacho()));
+            splitMessage = message.split(":");
+            speed = Integer.parseInt(splitMessage[1]);
+            System.out.println("Command: " + splitMessage[0] + " --- Speed: " + splitMessage[1]);
+            switch (splitMessage[0]) {
+                case "START":
+                    tachoThread.start();
+                    break;
                 case "LEFT":
-                    motorController.moveLeft();
+                    motorController.moveLeft(speed);
                     break;
                 case "RIGHT":
-                    motorController.moveRight();
+                    motorController.moveRight(speed);
                     break;
                 case "DOWN":
-                    motorController.moveDownControlled();
+                    motorController.moveDownControlled(speed);
                     break;
                 case "UP":
-                    motorController.moveUpControlled();
+                    motorController.moveUpControlled(speed);
                     break;
                 case "OPEN":
                     motorController.openCollector();
@@ -67,7 +80,11 @@ public class Client {
                     motorController.closeCollector();
                     break;
                 case "LEFTCTRLD":
-                    motorController.moveLeftControlled();
+                    motorController.moveLeftControlled(speed);
+                    break;
+                case "GETTACHO":
+                    out.writeUTF(String.valueOf(motorController.getTacho()));
+                    System.out.println("Sent tacho");
                     break;
                 default:
                     motorController.stop();
@@ -77,14 +94,26 @@ public class Client {
     }
 
     private void modeY() throws IOException {
+        /*while (mode.equals("1")) {
+            motorController.getTacho();
+            motorController.moveForwardControlled();
+        }*/
+        //System.exit(0);
+        out.writeUTF("READY");
         while (!(message = in.readUTF()).equals("EXIT")) {
-            System.out.println("Received message: " + message);
-            switch (message) {
+            //out.writeUTF(String.valueOf(motorController.getTacho()));
+            splitMessage = message.split(":");
+            speed = Integer.parseInt(splitMessage[1]);
+            System.out.println("Command: " + splitMessage[0] + " --- Speed: " + splitMessage[1]);
+            switch (splitMessage[0]) {
+                case "START":
+                    tachoThread.start();
+                    break;
                 case "FORWARD":
-                    motorController.moveForward();
+                    motorController.moveForward(speed);
                     break;
                 case "BACKWARD":
-                    motorController.moveBackward();
+                    motorController.moveBackward(speed);
                     break;
                 case "FORWARDCTRLD":
                     motorController.moveForwardControlled();
@@ -92,9 +121,23 @@ public class Client {
                 case "FORWARDCTRLD2":
                     motorController.moveForwardControlled2();
                     break;
+                case "GETTACHO":
+                    out.writeUTF(String.valueOf(motorController.getTacho()));
+                    break;
                 default:
                     motorController.stop();
                     break;
+            }
+        }
+    }
+
+    private void sendTacho() {
+        while (true) {
+            try {
+                out.writeUTF(String.valueOf(motorController.getTacho()));
+                //System.out.println("Sent tacho: " + motorController.getTacho());
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
     }
