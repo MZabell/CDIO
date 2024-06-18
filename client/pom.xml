@@ -41,7 +41,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            <mainClass>org.brick.Main</mainClass>
+                            <mainClass>mosqui2.brick.Main</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

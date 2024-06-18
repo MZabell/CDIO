@@ -1,4 +1,4 @@
-package org.detection;
+package mosqui2.detection;
 
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Point;

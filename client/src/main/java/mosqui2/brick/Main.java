@@ -1,4 +1,4 @@
-package org.brick;
+package mosqui2.brick;
 
 public class Main {
 

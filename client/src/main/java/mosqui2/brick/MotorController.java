@@ -1,7 +1,8 @@
-package org.brick;
+package mosqui2.brick;
 import ev3dev.actuators.Sound;
 import ev3dev.actuators.lego.motors.EV3LargeRegulatedMotor;
 import ev3dev.actuators.lego.motors.EV3MediumRegulatedMotor;
+import ev3dev.actuators.lego.motors.Motor;
 import lejos.hardware.port.MotorPort;
 import lejos.robotics.RegulatedMotor;
 
@@ -21,7 +22,6 @@ public class MotorController {
     public MotorController(String mode) {
 
         this.mode = mode;
-
         if (mode.equals("0")) {
             motorA = new EV3LargeRegulatedMotor(MotorPort.A);
             motorB = new EV3LargeRegulatedMotor(MotorPort.B);
@@ -42,23 +42,39 @@ public class MotorController {
             motorB.resetTachoCount();
             motorC.resetTachoCount();
             motorD.resetTachoCount();
+            motorA.setAcceleration(acc);
+            motorB.setAcceleration(acc);
+            motorC.setAcceleration(acc);
+            motorD.setAcceleration(acc);
             motors = new RegulatedMotor[]{motorB, motorC, motorD};
             motorA.synchronizeWith(motors);
         }
     }
     public void moveForward(int speed) {
         //System.out.println(motorA.getTachoCount());
+        //System.out.println("MotorA: " + motorA.getTachoCount() + " MotorB: " + motorB.getTachoCount() + " MotorC: " + motorC.getTachoCount() + " MotorD: " + motorD.getTachoCount());
         motorA.setSpeed(speed);
         motorB.setSpeed(speed);
         motorC.setSpeed(speed);
         motorD.setSpeed(speed);
+
         //motorA.synchronizeWith(new RegulatedMotor[]{motorB});
         motorA.startSynchronization();
-        motorA.forward();
-        motorB.forward();
-        motorC.backward();
-        motorD.backward();
+        motorA.rotate(10000, true);
+        motorB.rotate(10000, true);
+        motorC.rotate(-10000, true);
+        motorD.rotate(-10000, true);
         motorA.endSynchronization();
+        System.out.println(motorA.getPosition());
+        System.out.println(motorB.getPosition());
+        System.out.println(motorC.getPosition());
+        System.out.println(motorD.getPosition());
+
+        //System.out.println(motorA.isStalled());
+        //System.out.println(motorB.isStalled());
+        //System.out.println(motorC.isStalled());
+        //System.out.println(motorD.isStalled());
+        //System.out.println("MotorA: " + motorA.getTachoCount() + " MotorB: " + motorB.getTachoCount() + " MotorC: " + motorC.getTachoCount() + " MotorD: " + motorD.getTachoCount());
     }
     public void moveForwardControlled() {
 
@@ -69,16 +85,12 @@ public class MotorController {
 
         //motorA.synchronizeWith(new RegulatedMotor[]{motorB});
         motorA.startSynchronization();
-        motorA.forward();
-        motorB.forward();
         motorA.rotate(100, true);
         motorB.rotate(100, true);
         // Synchronize motors C and D for backward movement
         //motorC.synchronizeWith(new RegulatedMotor[]{motorD});
-        motorC.backward();
-        motorD.backward();
-        motorC.rotate(100, true);
-        motorD.rotate(100, true);
+        motorC.rotate(-100, true);
+        motorD.rotate(-100, true);
         motorA.endSynchronization();
         motorA.waitComplete();
         motorB.waitComplete();
@@ -148,10 +160,10 @@ public class MotorController {
         motorD.setSpeed(speed);
         //motorA.synchronizeWith(new RegulatedMotor[]{motorB});
         motorA.startSynchronization();
-        motorA.backward();
-        motorB.backward();
-        motorC.forward();
-        motorD.forward();
+        motorA.rotate(-10000, true);
+        motorB.rotate(-10000, true);
+        motorC.rotate(10000, true);
+        motorD.rotate(10000, true);
         motorA.endSynchronization();
     }
     public void moveBackwardControlled() {
@@ -188,18 +200,21 @@ public class MotorController {
         motorB.setSpeed(speed);
         motorA.synchronizeWith(new RegulatedMotor[]{motorB});
         motorA.startSynchronization();
-        motorA.forward();
-        motorB.forward();
+        motorA.rotate(10000, true);
+        motorB.rotate(10000, true);
         motorA.endSynchronization();
     } // right == backward
     public void moveLeft(int speed){
-        motorA.setSpeed(speed);
-        motorB.setSpeed(speed);
-        motorA.synchronizeWith(new RegulatedMotor[]{motorB});
-        motorA.startSynchronization();
-        motorA.backward();
-        motorB.backward();
-        motorA.endSynchronization();
+        do {
+            motorA.setSpeed(speed);
+            motorB.setSpeed(speed);
+            motorA.synchronizeWith(new RegulatedMotor[]{motorB});
+            motorA.startSynchronization();
+            motorA.rotate(-10000, true);
+            motorB.rotate(-10000, true);
+            motorA.endSynchronization();
+            speed++;
+        } while (motorA.isStalled() || motorB.isStalled());
     } //left == forward
 
     public void moveLeftControlled(int speed) {
@@ -309,8 +324,45 @@ public class MotorController {
         motorD.waitComplete();
     }
 
+    public void moveTo(int speed, int x, int y) {
+        //System.out.println("MotorA: " + motorA.getTachoCount() + " MotorB: " + motorB.getTachoCount() + " MotorC: " + motorC.getTachoCount() + " MotorD: " + motorD.getTachoCount());
+        motorA.setSpeed(speed);
+        motorB.setSpeed(speed);
+        if (mode.equals("0")) {
+            motorA.synchronizeWith(new RegulatedMotor[]{motorB});
+            motorA.startSynchronization();
+            motorA.rotateTo(x, true);
+            motorB.rotateTo(x, true);
+            motorA.endSynchronization();
+        } else {
+            motorC.setSpeed(speed);
+            motorD.setSpeed(speed);
+            motorA.startSynchronization();
+            motorA.rotateTo(y, true);
+            motorB.rotateTo(y, true);
+            motorC.rotateTo(-y, true);
+            motorD.rotateTo(-y, true);
+            motorA.endSynchronization();
+        }
+        motorA.waitComplete();
+        motorB.waitComplete();
+        //motorA.waitComplete();
+        //motorB.waitComplete();
+        //System.out.println("MotorA: " + motorA.getTachoCount() + " MotorB: " + motorB.getTachoCount() + " MotorC: " + motorC.getTachoCount() + " MotorD: " + motorD.getTachoCount());
+    }
+
+    public void resetTacho() {
+        motorA.resetTachoCount();
+        motorB.resetTachoCount();
+        motorC.resetTachoCount();
+        if (mode.equals("0")) {
+            motorE.resetTachoCount();
+        } else {
+            motorD.resetTachoCount();
+        }
+    }
+
     public int getTacho() {
-        //System.out.println(motorA.getTachoCount());
         return motorA.getTachoCount();
     }
 }

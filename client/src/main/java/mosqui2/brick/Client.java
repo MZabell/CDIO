@@ -1,9 +1,12 @@
-package org.brick;
+package mosqui2.brick;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class Client {
 
@@ -20,8 +23,11 @@ public class Client {
 
     String mode;
 
+    private ScheduledExecutorService executor;
+
     public Client(String IP) {
         try {
+            executor = Executors.newScheduledThreadPool(1);
             socket = new Socket(IP, 5000);
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
@@ -82,9 +88,11 @@ public class Client {
                 case "LEFTCTRLD":
                     motorController.moveLeftControlled(speed);
                     break;
-                case "GETTACHO":
-                    out.writeUTF(String.valueOf(motorController.getTacho()));
-                    System.out.println("Sent tacho");
+                case "RESET":
+                    motorController.resetTacho();
+                    break;
+                case "MOVETO":
+                    motorController.moveTo(speed, Integer.parseInt(splitMessage[2]), Integer.parseInt(splitMessage[3]));
                     break;
                 default:
                     motorController.stop();
@@ -104,7 +112,7 @@ public class Client {
             //out.writeUTF(String.valueOf(motorController.getTacho()));
             splitMessage = message.split(":");
             speed = Integer.parseInt(splitMessage[1]);
-            System.out.println("Command: " + splitMessage[0] + " --- Speed: " + splitMessage[1]);
+            System.out.println("Command: " + splitMessage[0] + " --- Speed: " + speed);
             switch (splitMessage[0]) {
                 case "START":
                     tachoThread.start();
@@ -121,8 +129,11 @@ public class Client {
                 case "FORWARDCTRLD2":
                     motorController.moveForwardControlled2();
                     break;
-                case "GETTACHO":
-                    out.writeUTF(String.valueOf(motorController.getTacho()));
+                case "RESET":
+                    motorController.resetTacho();
+                    break;
+                case "MOVETO":
+                    motorController.moveTo(speed, Integer.parseInt(splitMessage[2]), Integer.parseInt(splitMessage[3]));
                     break;
                 default:
                     motorController.stop();
@@ -131,14 +142,14 @@ public class Client {
         }
     }
 
-    private void sendTacho() {
-        while (true) {
+    private void sendTacho() throws RuntimeException {
+        executor.scheduleAtFixedRate(() -> {
             try {
                 out.writeUTF(String.valueOf(motorController.getTacho()));
                 //System.out.println("Sent tacho: " + motorController.getTacho());
             } catch (IOException e) {
-                e.printStackTrace();
+                throw new RuntimeException(e);
             }
-        }
+        }, 0, 100, TimeUnit.MICROSECONDS);
     }
 }

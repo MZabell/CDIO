@@ -1,4 +1,4 @@
-package org.detection;
+package mosqui2.detection;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -38,23 +38,9 @@ public class Server implements PropertyChangeListener {
         objectRecog.addPropertyChangeListener(this);
 
 
-        scanThread = new Thread(objectRecog::scan);
         threads.add(new Thread(() -> pollTacho(0)));
         threads.add(new Thread(() -> pollTacho(1)));
-        scanThread.start();
-        new Thread(() -> {
-            if (scanner.hasNext()) {
-                for (DataOutputStream out : outputStreams) {
-                    try {
-                        out.writeUTF("STOP");
-                    } catch (IOException e) {
-
-                        throw new RuntimeException(e);
-                    }
-                }
-                System.exit(0);
-            }
-        }).start();
+        //scanThread.start();
 
         try {
             serverSocket = new ServerSocket(5000);
@@ -85,7 +71,7 @@ public class Server implements PropertyChangeListener {
                    threads.get(1).start();
                    outputStreams.get(0).writeUTF("START:0");
                    outputStreams.get(1).writeUTF("START:0");
-                   objectRecog.start();
+                   //objectRecog.start();
                }
 
             }
@@ -97,7 +83,7 @@ public class Server implements PropertyChangeListener {
     @Override
     public void propertyChange(PropertyChangeEvent evt) {
         if (mode == 2) {
-            command = evt.getNewValue() + ":" + objectRecog.getSpeed();
+            command = evt.getNewValue() + ":" + objectRecog.getSpeed() + ":" + objectRecog.getTachoPoint().x + ":" + objectRecog.getTachoPoint().y;
             //System.out.println("Sent command: " + command);
             try {
                 if (Objects.equals(evt.getPropertyName(), "CommandY")) {

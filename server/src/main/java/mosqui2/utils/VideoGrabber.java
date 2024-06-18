@@ -1,4 +1,4 @@
-package org.utils;
+package mosqui2.utils;
 
 import org.bytedeco.javacv.FrameGrabber;
 import org.bytedeco.javacv.OpenCVFrameGrabber;

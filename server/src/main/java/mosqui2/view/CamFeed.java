@@ -1,4 +1,4 @@
-package org.view;
+package mosqui2.view;
 
 import javax.swing.*;
 import java.awt.*;

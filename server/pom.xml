@@ -38,7 +38,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            <mainClass>org.detection.Main</mainClass>
+                            <mainClass>mosqui2.Main</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
