@@ -39,13 +39,17 @@ public class Controller {
             switch (e.getActionCommand()) {
                 case "Calibrate":
                     objectRecog.setCircleParams(Calibrator.calibrate(view));
+                    break;
+                case "Scan":
                     objectRecog.scan();
                     break;
-                case "Start":
+                case "Map":
                     objectRecog.mapField();
                     break;
-                case "Stop":
+                case "Start":
                     objectRecog.start();
+                    break;
+                case "Stop":
                     break;
                 case "Exit":
                     break;

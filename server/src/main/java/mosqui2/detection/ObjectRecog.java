@@ -1,6 +1,5 @@
 package mosqui2.detection;
 
-import mosqui2.utils.Calibrator;
 import mosqui2.view.View;
 import org.bytedeco.javacv.*;
 import org.bytedeco.opencv.opencv_core.*;
@@ -8,14 +7,10 @@ import org.bytedeco.opencv.opencv_imgproc.Vec3fVector;
 import org.bytedeco.opencv.opencv_tracking.TrackerKCF;
 
 import javax.swing.Timer;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.PriorityBlockingQueue;
 
 import static org.bytedeco.opencv.global.opencv_core.*;
@@ -34,20 +29,52 @@ public class ObjectRecog {
     private static Rect lockZone;
     private static Rect edgeUp;
     private static Rect edgeDown;
+    private static Rect edgeDown2;
     private static Rect edgeLeft;
     private static Rect edgeRight;
-    private Mat upMat, downMat, leftMat, rightMat;
+    private Mat upMat, downMat, downMat2, leftMat, rightMat, lockMat;
+    private Mat leftfrontBound, leftbackBound, rightfrontBound, rightbackBound, upfrontBound, upbackBound, downfrontBound, downbackBound;
     //OpenCVFrameGrabber grabber;
 
-    public int getSpeed() {
-        return speed;
+    public void changeSpeedX(int speedX) {
+        support.firePropertyChange("SpeedX", this.speedX, speedX);
+        this.speedX = speedX;
     }
 
-    public void setSpeed(int speed) {
-        this.speed = speed;
+    public void changeSpeedY(int speedY) {
+        support.firePropertyChange("SpeedY", this.speedY, speedY);
+        this.speedY = speedY;
     }
 
-    private int speed = 0;
+    public int getSpeedX() {
+        return speedX;
+    }
+
+    public void setSpeedX(int speedX) {
+        //support.firePropertyChange("SpeedX", this.speedX, speedX);
+        this.speedX = speedX;
+    }
+
+    public String getCommandX() {
+        return commandX;
+    }
+
+    public String getCommandY() {
+        return commandY;
+    }
+
+    private int speedX = 0;
+
+    public int getSpeedY() {
+        return speedY;
+    }
+
+    public void setSpeedY(int speedY) {
+        //support.firePropertyChange("SpeedY", this.speedY, speedY);
+        this.speedY = speedY;
+    }
+
+    private int speedY = 0;
 
     public void setTachoY(int tachoY) {
         //System.out.println("TachoY: " + tachoY);
@@ -97,7 +124,7 @@ public class ObjectRecog {
 
             @Override
             public void move(ObjectRecog o) {
-                o.setCommandY("FORWARD");
+                o.setCommandY("MOVETO");
                 o.setCommandX("STOP");
             }
         },
@@ -110,7 +137,7 @@ public class ObjectRecog {
 
             @Override
             public void move(ObjectRecog o) {
-                o.setCommandY("BACKWARD");
+                o.setCommandY("MOVETO");
                 o.setCommandX("STOP");
             }
         },
@@ -140,7 +167,7 @@ public class ObjectRecog {
                         o.wait(500);
                         o.setCommandY("STOP");
                         o.setCommandX("LEFT");
-                        o.wait(2000);
+                        o.wait(3000);
                     }
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -185,22 +212,11 @@ public class ObjectRecog {
         SearchDone {
             @Override
             public SearchState nextState() {
-                return SearchDone;
+                return null;
             }
 
             @Override
             public void move(ObjectRecog o) {
-                try {
-                    synchronized (o) {
-                        o.setCommandX("LEFTCTRLD");
-                        o.setCommandY("FORWARDCTRLD2");
-                        o.wait(5000);
-                        o.setCommandX("CLOSE");
-                        o.wait(3000);
-                    }
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
             }
         },
         SearchGoal {
@@ -211,16 +227,26 @@ public class ObjectRecog {
 
             @Override
             public void move(ObjectRecog o) {
-                if (o.checkBoundry(o.rightMat)) {
-                    o.setCommandX("STOP");
-                } else if (!Objects.equals(o.commandX, "STOP")) {
-                    o.setCommandX("RIGHT");
-                }
-
-                if (o.checkBoundry(o.downMat)) {
-                    o.setCommandY("STOP");
-                } else if (!Objects.equals(o.commandY, "STOP")){
-                    o.setCommandY("BACKWARD");
+                try {
+                    synchronized (o) {
+                        o.setCommandY("STOP");
+                        o.setCommandX("STOP");
+                        o.setCommandY("MOVETO");
+                        o.setCommandX("MOVETO");
+                        o.wait(10000);
+                        o.setCommandY("STOP");
+                        o.setCommandX("OPEN");
+                        o.wait(5000);
+                        o.setTachoPoint(new java.awt.Point(o.getTachoX(), o.getTachoY() -50));
+                        o.setCommandY("MOVETO");
+                        o.wait(2000);
+                        o.setTachoPoint(new java.awt.Point(o.getTachoX(), o.getTachoY() + 100));
+                        o.setCommandY("STOP");
+                        o.setCommandY("MOVETO");
+                        o.setCommandX("CLOSE");
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
             }
         },
@@ -233,6 +259,8 @@ public class ObjectRecog {
             @Override
             public void move(ObjectRecog o) {
                 System.out.println("Returning: " + o.getTachoPoint());
+                o.setCommandY("STOP");
+                o.setCommandX("STOP");
                 o.setCommandX("MOVETO");
                 o.setCommandY("MOVETO");
 
@@ -279,10 +307,6 @@ public class ObjectRecog {
 
             @Override
             public void move(ObjectRecog o, DetectedObject object) {
-                if (object == null) {
-                    o.setCommandY("BACKWARD");
-                    return;
-                }
                 if (object.getRoi().y() < lockZone.y()) {
                     o.setCommandY("FORWARD");
                 } else if (object.getRoi().y() + object.getRoi().height() > lockZone.y() + lockZone.height()) {
@@ -310,10 +334,10 @@ public class ObjectRecog {
             public void move(ObjectRecog o, DetectedObject object) {
                 try {
                     synchronized (o) {
-                        o.setSpeed(150);
+                        o.setSpeedY(150);
                         o.setCommandY("FORWARDCTRLD");
                         o.wait(2000);
-                        o.setSpeed(650);
+                        o.setSpeedX(650);
                         o.setCommandX("DOWN");
                         o.wait(3000);
                     }
@@ -332,15 +356,14 @@ public class ObjectRecog {
             public void move(ObjectRecog o, DetectedObject object) {}
         },
 
-        Reset {
+        Completed {
             @Override
             public CollectState nextState() {
-                return NotFound;
+                return null;
             }
 
             @Override
-            public void move(ObjectRecog o, DetectedObject object) {
-            }
+            public void move(ObjectRecog o, DetectedObject object) {}
         };
 
         public abstract CollectState nextState();
@@ -360,13 +383,20 @@ public class ObjectRecog {
     ArrayList<TrackerKCF> trackers;
     ArrayList<DetectedObject> objectsToRemove;
     ArrayList<TrackerKCF> trackersToRemove;
-    PIDController pid;
+    //PIDController pid;
+
+    Timer searchTimeout;
+
+    CollectState collectState;
+    SearchState searchState;
+
+    boolean isLocked = false;
 
     public void setCircleParams(double[] circleParams) {
         this.circleParams = circleParams;
     }
 
-    private double[] circleParams;
+    private double[] circleParams = {1.0, 20.0, 130.0, 41.0, 1.0, 30.0};
 
     HashMap<String, java.awt.Point> tachoMap;
 
@@ -387,17 +417,26 @@ public class ObjectRecog {
         //grabber = new OpenCVFrameGrabber(1);
         support = new PropertyChangeSupport(this);
         lock = new Timer(2000, e -> {
-            setCommandX("DOWN");
+            System.out.println("LOCKED");
+            isLocked = true;
         });
         unlock = new Timer(5000, e -> {
             setCommandX("TEST");
             System.out.println("UNLOCKED");
             System.out.println(queue.size());
         });
+        searchTimeout = new Timer(2000, e -> {
+            System.out.println("Search timeout");
+            if (queue.isEmpty()) {
+                collectState = CollectState.NotFound;
+                searchState = SearchState.SearchReturn;
+            }
+        });
 
+        searchTimeout.setRepeats(false);
         lock.setRepeats(false);
         unlock.setRepeats(false);
-        pid = new PIDController(0.1, 0.1, 0.1);
+        //pid = new PIDController(0.1, 0.1, 0.1);
     }
 
     public void scan() {
@@ -443,18 +482,29 @@ public class ObjectRecog {
             grabber.stop();
             grabber.start();
             lockZone = new Rect(grabber.getImageWidth() / 2 - 20, grabber.getImageHeight() / 2 - 50, 60, 60);
-            edgeUp = new Rect(lockZone.x() + lockZone.width() / 2 - 5, lockZone.y() - 50, 10, 50);
-            edgeDown = new Rect(lockZone.x(), lockZone.y() + lockZone.height(), 80, 50);
-            edgeLeft = new Rect(lockZone.x() - 50, lockZone.y() + lockZone.height() / 2 - 5, 50, 10);
-            edgeRight = new Rect(lockZone.x() + lockZone.width(), lockZone.y() + lockZone.height() / 2 - 5, 50, 10);
+            edgeUp = new Rect(lockZone.x() + 10, lockZone.y() - 40, 40, 15);
+            edgeDown = new Rect(lockZone.x(), lockZone.y() + lockZone.height(), lockZone.width() , 10);
+            //edgeDown2 = new Rect(lockZone.x() + lockZone.width() + 60, lockZone.y() + lockZone.height(), 10, 70);
+            edgeLeft = new Rect(lockZone.x() - 40, lockZone.y() + 10, 15, 40);
+            edgeRight = new Rect(lockZone.x() + lockZone.width() + 25, lockZone.y() + 10, 15, 40);
             Frame frame;
             frame = grabber.grab();
             image = converter.convert(frame);
             inRange(image, lowerRed, upperRed, boundryMat);
+            lockMat = boundryMat.apply(lockZone);
             upMat = boundryMat.apply(edgeUp);
             downMat = boundryMat.apply(edgeDown);
+            //downMat2 = boundryMat.apply(edgeDown2);
             leftMat = boundryMat.apply(edgeLeft);
             rightMat = boundryMat.apply(edgeRight);
+            leftfrontBound = leftMat.col(0);
+            leftbackBound = leftMat.col(leftMat.cols() - 1);
+            rightfrontBound = rightMat.col(rightMat.cols() - 1);
+            rightbackBound = rightMat.col(0);
+            upfrontBound = upMat.row(0);
+            upbackBound = upMat.row(upMat.rows() - 1);
+            downfrontBound = downMat.row(downMat.rows() - 1);
+            downbackBound = downMat.row(0);
             while ((frame = grabber.grab()) != null) {
                 image = converter.convert(frame);
 
@@ -464,7 +514,7 @@ public class ObjectRecog {
                 //System.out.println(contours.size());
 
                 cvtColor(image, gray, CV_BGR2GRAY);
-                GaussianBlur(gray, gray, new Size(7, 7), 2);
+                GaussianBlur(gray, gray, new Size(3, 3), 2);
 
                 //System.out.println("Hough");
                 HoughCircles(gray, circles, HOUGH_GRADIENT, circleParams[0], circleParams[1], circleParams[2], circleParams[3], (int) circleParams[4], (int) circleParams[5]);
@@ -519,10 +569,12 @@ public class ObjectRecog {
                     if (positive && cmpScalar(mean(o.getColor()), lowerScalar)){
                         o.updateCircle(image);
                         //putText(image, (int) o.getDistance() + " cm", o.getRoi().tl(), FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(255, 0, 0, 0));
-                        if (queue.peek() == o)
+                        if (queue.peek() == o) {
                             circle(image, o.getCenter(), o.getRadius(), new Scalar(0, 0, 255, 0), 2, LINE_8, 0);
-                        else
+                            //System.out.println(o.getRadius());
+                        }else {
                             circle(image, o.getCenter(), o.getRadius(), new Scalar(0, 255, 0, 0), 2, LINE_8, 0);
+                        }
                     } else {
                         trackersToRemove.add(trackers.get(detectedObjects.indexOf(o)));
                         objectsToRemove.add(o);
@@ -536,6 +588,7 @@ public class ObjectRecog {
                 rectangle(image, lockZone, new Scalar(0, 0, 255, 0));
                 rectangle(image, edgeUp, new Scalar(0, 0, 255, 0));
                 rectangle(image, edgeDown, new Scalar(0, 0, 255, 0));
+                //rectangle(image, edgeDown2, new Scalar(0, 0, 255, 0));
                 rectangle(image, edgeLeft, new Scalar(0, 0, 255, 0));
                 rectangle(image, edgeRight, new Scalar(0, 0, 255, 0));
 
@@ -570,15 +623,16 @@ public class ObjectRecog {
     }
 
     public void start() {
-        SearchState searchState = SearchState.SearchForward;
-        CollectState collectState = CollectState.NotFound;
+        new Thread(() -> {
+
+        searchState = SearchState.SearchForward;
+        collectState = CollectState.NotFound;
         int trips = 0;
 
         while (searchState != null) {
             //System.out.println(getTachoX());
             switch (collectState) {
                 case NotFound:
-                    setSpeed(500);
                     if (!queue.isEmpty() && trips < 10) {
                         collectState = collectState.nextState();
                         if (searchState != SearchState.SearchWait)
@@ -590,15 +644,26 @@ public class ObjectRecog {
                         break;
                     } else break;
                 case Found:
-                    setSpeed(150);
+                    setSpeedX(150);
+                    setSpeedY(150);
                     if (commandX.equals("STOP") && commandY.equals("STOP")) {
                         collectState = collectState.nextState();
+                        searchTimeout.stop();
                     } else {
-                        collectState.move(this, queue.peek());
+                        DetectedObject object = queue.peek();
+                        if (object != null) {
+                            searchTimeout.stop();
+                            //System.out.println("Object found");
+                            collectState.move(this, object);
+                        } else if (!searchTimeout.isRunning()) {
+                            //System.out.println(searchTimeout.isRunning());
+                            System.out.println("Search timeout started");
+                            searchTimeout.restart();
+                        }
                         break;
                     }
                 case Engaged:
-                    setSpeed(650);
+                    setSpeedX(650);
                     collectState.move(this, queue.peek());
                     collectState = collectState.nextState();
                 case Done:
@@ -610,7 +675,10 @@ public class ObjectRecog {
                     System.out.println(searchState);
                     if (++trips == 10) {
                         searchState = SearchState.SearchGoal;
+                        collectState = CollectState.Completed;
                     }
+                    break;
+                case Completed:
                     break;
             }
 
@@ -630,47 +698,95 @@ public class ObjectRecog {
                         System.out.println("Return: " + searchState);
                     break;
                 case SearchForward:
-                    if (getTachoY() < 4000)
-                        setSpeed(500);
-                    else setSpeed(150);
-                    if (checkBoundry(upMat)) {
-                        //System.out.println(tachoY);
-                        System.out.println("Boundry breached UP");
-                        searchState = searchState.nextState();
-                    } else {
-                        searchState.move(this);
+                    setTachoPoint(tachoMap.get("TL"));
+                    searchState.move(this);
+                    if (getTachoY() < 4000) {
+                        System.out.println(getSpeedY());
+                        changeSpeedY(500);
+                        System.out.println(getSpeedY());
                     }
+                    else {
+                        changeSpeedY(150);
+                    }
+                    if (getTachoY() == getTachoPoint().y) {
+                        searchState = searchState.nextState();
+                    }
+
+                    /*switch (checkBoundry(upMat)) {
+
+                        case -1:
+                            setSpeed(100);
+                            setCommandY("BACKWARD");
+                            //System.out.println("Boundry breached UP");
+                            //searchState = searchState.nextState();
+                            break;
+                        case 0:
+                            setCommandY("STOP");
+                            searchState = searchState.nextState();
+                            break;
+                        case 1:
+                            setSpeed(100);
+                            setCommandY("FORWARD");
+                            break;
+                        default:
+                            searchState.move(this);
+                            break;
+                    }*/
                     break;
                 case SearchBackward:
+                    setTachoPoint(tachoMap.get("BL"));
+                    searchState.move(this);
                     if (getTachoY() > 1000)
-                        setSpeed(500);
-                    else setSpeed(150);
-                    if (checkBoundry(downMat)) {
-                        System.out.println(tachoY);
-                        System.out.println("Boundry breached DOWN");
-                        setCommandY("RESET");
+                        changeSpeedY(500);
+                    else changeSpeedY(150);
+                    if (getTachoY() == getTachoPoint().y) {
                         searchState = searchState.nextState();
-                    } else {
-                        searchState.move(this);
                     }
+                    //switch (checkBoundry(lockMat)) {
+
+                        /*case 0:
+                            setCommandY("STOP");
+                            setCommandY("RESET");
+                            searchState = searchState.nextState();
+                            break;
+                        case 1:
+                            setSpeed(100);
+                            setCommandY("BACKWARD");
+                            break;
+                        default:
+                            searchState.move(this);
+                            break;
+                    }*/
                     break;
                 case SearchLeft:
                 case SearchRight:
-                    setSpeed(400);
+                    setSpeedX(400);
                     searchState.move(this);
                     searchState = searchState.nextState();
                     break;
                 case SearchGoal:
-                    setSpeed(150);
-                    searchState.move(this);
+                    /*setSpeed(300);
                     System.out.println("10 balls collected!");
-                    if (Objects.equals(commandY, "STOP") && Objects.equals(commandX, "STOP")) {
-                        System.out.println("Goal reached");
-                        searchState = searchState.nextState();
+                    while (!commandX.equals("STOP") || !commandY.equals("STOP")) {
+                        if (checkBoundry(leftMat)) {
+                            setCommandX("STOP");
+                        } else setCommandX("LEFT");
+
+                        if (checkBoundry(downMat)) {
+                            setCommandY("STOP");
+                        } else setCommandY("BACKWARD");
                     }
+                    setCommandX("RESET");
+                    setCommandY("RESET");*/
+                    setSpeedX(800);
+                    setSpeedY(800);
+                    //setTachoPoint(tachoMap.get("BL"));
+                    setTachoPoint(new java.awt.Point(tachoMap.get("BR").x / 2, 1100));
+                    searchState.move(this);
+                    searchState = searchState.nextState();
                     break;
                 case SearchDone:
-                    setSpeed(800);
+                    setSpeedX(800);
                     searchState.move(this);
                     System.out.println("Search done");
                     searchState = searchState.nextState();
@@ -683,60 +799,189 @@ public class ObjectRecog {
                 searchState = SearchState.SearchDone;
             }*/
         }
+        }).start();
     }
 
     public void mapField() {
-        setSpeed(300);
-        int tachoX = 0;
-        int tachoY = 0;
-        while (!commandX.equals("STOP") || !commandY.equals("STOP")) {
-            if (checkBoundry(leftMat)) {
-                setCommandX("STOP");
-            } else setCommandX("LEFT");
+        new Thread(() -> {
+            //setSpeedX(300);
+            int tachoX = 0;
+            int tachoY = 0;
 
-            if (checkBoundry(downMat)) {
-                setCommandY("STOP");
-            } else setCommandY("BACKWARD");
-        }
-        setCommandX("RESET");
-        setCommandY("RESET");
-        while (!commandX.equals("STOP") || !commandY.equals("STOP")) {
-            if (checkBoundry(upMat) && !commandY.equals("STOP")) {
-                setCommandY("STOP");
-                System.out.println("Boundry breached UP");
-            } else if (!commandY.equals("STOP"))
-                setCommandY("FORWARD");
+            //Mat result = new Mat();
+            //findNonZero(leftMat, result);
+            //System.out.println(countNonZero(leftMat.col(0)));
+            //IntRawIndexer idx = result.createIndexer();
+            //Point2dVector points = new Point2dVector(result);
+            //System.out.println(idx.get(0, 0));
+            while (!isLocked) {
 
-        if (checkBoundry(rightMat) && !commandX.equals("STOP")) {
-            setCommandX("STOP");
-            System.out.println("Boundry breached DOWN");
-        } else if (!commandX.equals("STOP"))
-            setCommandX("RIGHT");
-        }
-        tachoX = getTachoX();
-        tachoY = getTachoY();
-        tachoMap.put("BL", new java.awt.Point(0, 0));
-        tachoMap.put("BR", new java.awt.Point(tachoX, 0));
-        tachoMap.put("TL", new java.awt.Point(0, tachoY));
-        tachoMap.put("TR", new java.awt.Point(tachoX, tachoY));
-        System.out.println(tachoMap);
-        setSpeed(800);
-        setTachoPoint(tachoMap.get("BR"));
-        setCommandY("MOVETO");
-        setCommandX("MOVETO");
-        //setTachoPoint(tachoMap.get("BL"));
-        //setCommandY("FORWARD");
-        //setCommandY("BACKWARD");
-        //setCommandY("FORWARD");
-        //setCommandY("BACKWARD");
-        //setCommandY("FORWARD");
-        //setCommandY("MOVETO");
-        //setCommandY("BACKWARD");
-        //setCommandY("STOP");
-        //setTachoPoint(new java.awt.Point(0, 2000));
+                switch (checkBoundry(leftfrontBound, leftbackBound)) {
+                    case -1:
+                        setSpeedX(50);
+                        setCommandX("RIGHT");
+                        lock.restart();
+                        //System.out.println("Boundry breached UP");
+                        //searchState = searchState.nextState();
+                        break;
+                    case 0:
+                        setCommandX("STOP");
+                        break;
+                    case 1:
+                        setSpeedX(50);
+                        setCommandX("LEFT");
+                        lock.restart();
+                        break;
+                    case 2:
+                        setSpeedX(100);
+                        setCommandX("LEFT");
+                        lock.restart();
+                        break;
+                    case -2:
+                        lock.restart();
+                        break;
+                    default:
+                        //setSpeed(300);
+                        //setCommandX("LEFT");
+                        break;
+                }
 
-        //setCommandY("MOVETO");
+                switch (checkBoundry(downfrontBound, downbackBound)) {
+                    case -1:
+                        setSpeedY(40);
+                        setCommandY("FORWARD");
+                        lock.restart();
+                        //System.out.println("Boundry breached UP");
+                        //searchState = searchState.nextState();
+                        break;
+                    case 0:
+                        setCommandY("STOP");
+                        break;
+                    case 1:
+                        setSpeedY(40);
+                        setCommandY("BACKWARD");
+                        lock.restart();
+                        break;
+                    case 2:
+                        setSpeedY(100);
+                        setCommandY("BACKWARD");
+                        lock.restart();
+                        break;
+                    case -2:
+                        lock.restart();
+                        break;
+                    default:
+                        //setSpeed(300);
+                        //setCommandX("LEFT");
+                        break;
+                }
+            }
 
+                /*switch (checkBoundry(lockMat)) {
+                    case 0:
+                        setCommandY("STOP");
+                        break;
+                    case 1:
+                        setSpeed(100);
+                        setCommandY("BACKWARD");
+                        break;
+                    default:
+                        setSpeed(300);
+                        setCommandY("BACKWARD");
+                        break;
+                }
+            }*/
+            lock.stop();
+            isLocked = false;
+            setCommandX("RESET");
+            setCommandY("RESET");
+            while (!isLocked) {
+                switch (checkBoundry(rightfrontBound, rightbackBound)) {
+                    case -1:
+                        setSpeedX(50);
+                        setCommandX("LEFT");
+                        lock.restart();
+                        //System.out.println("Boundry breached UP");
+                        //searchState = searchState.nextState();
+                        break;
+                    case 0:
+                        setCommandX("STOP");
+                        break;
+                    case 1:
+                        setSpeedX(50);
+                        setCommandX("RIGHT");
+                        lock.restart();
+                        break;
+                    case 2:
+                        setSpeedX(100);
+                        setCommandX("RIGHT");
+                        lock.restart();
+                        break;
+                    case -2:
+                        lock.restart();
+                        break;
+                    default:
+                        //setSpeed(300);
+                        //setCommandX("LEFT");
+                        break;
+                }
+
+                switch (checkBoundry(upfrontBound, upbackBound)) {
+                    case -1:
+                        setSpeedY(50);
+                        setCommandY("BACKWARD");
+                        lock.restart();
+                        //System.out.println("Boundry breached UP");
+                        //searchState = searchState.nextState();
+                        break;
+                    case 0:
+                        setCommandY("STOP");
+                        break;
+                    case 1:
+                        setSpeedY(50);
+                        setCommandY("FORWARD");
+                        lock.restart();
+                        break;
+                    case 2:
+                        setSpeedY(100);
+                        setCommandY("FORWARD");
+                        lock.restart();
+                        break;
+                    case -2:
+                        lock.restart();
+                        break;
+                    default:
+                        //setSpeed(300);
+                        //setCommandX("LEFT");
+                        break;
+                }
+            }
+            lock.stop();
+            tachoX = getTachoX();
+            tachoY = getTachoY();
+            tachoMap.put("BL", new java.awt.Point(0, 0));
+            tachoMap.put("BR", new java.awt.Point(tachoX, 0));
+            tachoMap.put("TL", new java.awt.Point(0, tachoY));
+            tachoMap.put("TR", new java.awt.Point(tachoX, tachoY));
+            System.out.println(tachoMap);
+            setSpeedX(800);
+            setSpeedY(800);
+            setTachoPoint(tachoMap.get("BR"));
+            setCommandY("MOVETO");
+            setCommandX("MOVETO");
+            //setTachoPoint(tachoMap.get("BL"));
+            //setCommandY("FORWARD");
+            //setCommandY("BACKWARD");
+            //setCommandY("FORWARD");
+            //setCommandY("BACKWARD");
+            //setCommandY("FORWARD");
+            //setCommandY("MOVETO");
+            //setCommandY("BACKWARD");
+            //setCommandY("STOP");
+            //setTachoPoint(new java.awt.Point(0, 2000));
+
+            //setCommandY("MOVETO");
+        }).start();
     }
 
     public boolean cmpScalar(Scalar s1, Scalar s2) {
@@ -748,8 +993,22 @@ public class ObjectRecog {
         return dist;
     }
 
-    public boolean checkBoundry(Mat zoneMat) {
-        return (contours.size() != 0 && countNonZero(zoneMat) > 0 && (getTachoY() < 1000 || getTachoY() > 3000));
+    public int checkBoundry(Mat frontBound, Mat backBound) {
+        if ((getTachoY() < 1000 || getTachoY() > 3000) && contours.size() != 0) {
+            if (countNonZero(frontBound) > 0 && countNonZero(backBound) > 0) {
+                //System.out.println("STOP");
+                return 0;
+            } else if (countNonZero(frontBound) > 0) {
+                //System.out.println("LEFT speed 100");
+                return 1;
+            } else if (countNonZero(backBound) > 0) {
+                //System.out.println("RIGHT speed 100");
+                return -1;
+            } else {
+                //System.out.println("LEFT speed 300");
+                return 2;
+            }
+        } else return -2;
     }
 
     public void addPropertyChangeListener(PropertyChangeListener listener) {

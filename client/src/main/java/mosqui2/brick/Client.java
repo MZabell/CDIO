@@ -1,5 +1,8 @@
 package mosqui2.brick;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -7,6 +10,8 @@ import java.net.Socket;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.SimpleFormatter;
+import java.util.logging.StreamHandler;
 
 public class Client {
 
@@ -25,12 +30,15 @@ public class Client {
 
     private ScheduledExecutorService executor;
 
+    private StreamHandler logger;
+
     public Client(String IP) {
         try {
             executor = Executors.newScheduledThreadPool(1);
             socket = new Socket(IP, 5000);
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
+            //logger = new StreamHandler(socket.getOutputStream(), new SimpleFormatter());
             tachoThread = new Thread(this::sendTacho);
             mode = in.readUTF();
             //mode = "1";
@@ -51,7 +59,8 @@ public class Client {
             out.close();
             socket.close();
         } catch (Exception e) {
-            motorController.stop();
+            //e.printStackTrace();
+            motorController.exit();
             System.out.println("Client disconnected");
         }
     }
@@ -62,7 +71,7 @@ public class Client {
             //out.writeUTF(String.valueOf(motorController.getTacho()));
             splitMessage = message.split(":");
             speed = Integer.parseInt(splitMessage[1]);
-            System.out.println("Command: " + splitMessage[0] + " --- Speed: " + splitMessage[1]);
+            System.out.println("Command: " + splitMessage[0] + " --- Speed: " + speed);
             switch (splitMessage[0]) {
                 case "START":
                     tachoThread.start();
@@ -94,8 +103,14 @@ public class Client {
                 case "MOVETO":
                     motorController.moveTo(speed, Integer.parseInt(splitMessage[2]), Integer.parseInt(splitMessage[3]));
                     break;
-                default:
+                case "EXIT":
+                    motorController.exit();
+                    break;
+                case "STOP":
                     motorController.stop();
+                    break;
+                default:
+                    motorController.exit();
                     break;
             }
         }
@@ -135,21 +150,27 @@ public class Client {
                 case "MOVETO":
                     motorController.moveTo(speed, Integer.parseInt(splitMessage[2]), Integer.parseInt(splitMessage[3]));
                     break;
-                default:
+                case "EXIT":
+                    motorController.exit();
+                    break;
+                case "STOP":
                     motorController.stop();
+                    break;
+                default:
+                    motorController.exit();
                     break;
             }
         }
     }
 
-    private void sendTacho() throws RuntimeException {
+    private void sendTacho() {
         executor.scheduleAtFixedRate(() -> {
             try {
                 out.writeUTF(String.valueOf(motorController.getTacho()));
                 //System.out.println("Sent tacho: " + motorController.getTacho());
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                motorController.exit();
             }
-        }, 0, 100, TimeUnit.MICROSECONDS);
+        }, 0, 100, TimeUnit.MILLISECONDS);
     }
 }

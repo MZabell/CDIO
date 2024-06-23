@@ -83,21 +83,38 @@ public class Server implements PropertyChangeListener {
     @Override
     public void propertyChange(PropertyChangeEvent evt) {
         if (mode == 2) {
-            command = evt.getNewValue() + ":" + objectRecog.getSpeed() + ":" + objectRecog.getTachoPoint().x + ":" + objectRecog.getTachoPoint().y;
-            //System.out.println("Sent command: " + command);
+            String property = evt.getPropertyName();
             try {
-                if (Objects.equals(evt.getPropertyName(), "CommandY")) {
-                    outputStreams.get(1).writeUTF(command);
-                    /*if (command.contains("GETTACHO")) {
-                        objectRecog.setTachoY(Integer.parseInt(inputStreams.get(1).readUTF()));
-                    }*/
-                } else if (Objects.equals(evt.getPropertyName(), "CommandX")) {
-                    outputStreams.get(0).writeUTF(command);
-                    /*if (command.contains("GETTACHO")) {
-                        objectRecog.setTachoX(Integer.parseInt(inputStreams.get(0).readUTF()));
-                    }*/
+                switch (property) {
+                    case "CommandY":
+                        command = evt.getNewValue() + ":" + objectRecog.getSpeedY() + ":" + objectRecog.getTachoPoint().x + ":" + objectRecog.getTachoPoint().y;
+                        outputStreams.get(1).writeUTF(command);
+                        break;
+                    case "CommandX":
+                        command = evt.getNewValue() + ":" + objectRecog.getSpeedX() + ":" + objectRecog.getTachoPoint().x + ":" + objectRecog.getTachoPoint().y;
+                        outputStreams.get(0).writeUTF(command);
+                        break;
+                    case "SpeedY":
+                        command = objectRecog.getCommandY() + ":" + evt.getNewValue() + ":" + objectRecog.getTachoPoint().x + ":" + objectRecog.getTachoPoint().y;
+                        outputStreams.get(1).writeUTF(command);
+                        break;
+                    case "SpeedX":
+                        command = objectRecog.getCommandX() + ":" + evt.getNewValue() + ":" + objectRecog.getTachoPoint().x + ":" + objectRecog.getTachoPoint().y;
+                        outputStreams.get(0).writeUTF(command);
+                        break;
                 }
-
+                /*if (Objects.equals(evt.getPropertyName(), "CommandY")) {
+                    command = evt.getNewValue() + ":" + objectRecog.getSpeedY() + ":" + objectRecog.getTachoPoint().x + ":" + objectRecog.getTachoPoint().y;
+                    outputStreams.get(1).writeUTF(command);
+                    if (command.contains("GETTACHO")) {
+                        objectRecog.setTachoY(Integer.parseInt(inputStreams.get(1).readUTF()));
+                    }
+                } else if (Objects.equals(evt.getPropertyName(), "CommandX") || Objects.equals(evt.getPropertyName(), "SpeedX")) {
+                    outputStreams.get(0).writeUTF(command);
+                    if (command.contains("GETTACHO")) {
+                        objectRecog.setTachoX(Integer.parseInt(inputStreams.get(0).readUTF()));
+                    }
+                }*/
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

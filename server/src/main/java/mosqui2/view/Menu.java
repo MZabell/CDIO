@@ -10,6 +10,14 @@ public class Menu extends JPanel {
         calibrateButton.addActionListener(listener);
         add(calibrateButton);
 
+        JButton scanButton = new JButton("Scan");
+        scanButton.addActionListener(listener);
+        add(scanButton);
+
+        JButton mapButton = new JButton("Map");
+        mapButton.addActionListener(listener);
+        add(mapButton);
+
         JButton startButton = new JButton("Start");
         startButton.addActionListener(listener);
         add(startButton);
