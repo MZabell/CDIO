@@ -237,10 +237,10 @@ public class ObjectRecog {
                         o.setCommandY("STOP");
                         o.setCommandX("OPEN");
                         o.wait(5000);
-                        o.setTachoPoint(new java.awt.Point(o.getTachoX(), o.getTachoY() -50));
+                        o.setTachoPoint(new java.awt.Point(o.tachoMap.get("Goal").x, o.tachoMap.get("Goal").y - 150));
                         o.setCommandY("MOVETO");
-                        o.wait(2000);
-                        o.setTachoPoint(new java.awt.Point(o.getTachoX(), o.getTachoY() + 100));
+                        o.wait(5000);
+                        o.setTachoPoint(o.tachoMap.get("Goal"));
                         o.setCommandY("STOP");
                         o.setCommandY("MOVETO");
                         o.setCommandX("CLOSE");
@@ -258,7 +258,6 @@ public class ObjectRecog {
 
             @Override
             public void move(ObjectRecog o) {
-                System.out.println("Returning: " + o.getTachoPoint());
                 o.setCommandY("STOP");
                 o.setCommandX("STOP");
                 o.setCommandX("MOVETO");
@@ -396,7 +395,7 @@ public class ObjectRecog {
         this.circleParams = circleParams;
     }
 
-    private double[] circleParams = {1.0, 20.0, 130.0, 41.0, 1.0, 30.0};
+    private double[] circleParams = {1.0, 20.0, 130.0, 41.0, 1.0, 25.0};
 
     HashMap<String, java.awt.Point> tachoMap;
 
@@ -425,7 +424,7 @@ public class ObjectRecog {
             System.out.println("UNLOCKED");
             System.out.println(queue.size());
         });
-        searchTimeout = new Timer(2000, e -> {
+        searchTimeout = new Timer(1000, e -> {
             System.out.println("Search timeout");
             if (queue.isEmpty()) {
                 collectState = CollectState.NotFound;
@@ -482,11 +481,11 @@ public class ObjectRecog {
             grabber.stop();
             grabber.start();
             lockZone = new Rect(grabber.getImageWidth() / 2 - 20, grabber.getImageHeight() / 2 - 50, 60, 60);
-            edgeUp = new Rect(lockZone.x() + 10, lockZone.y() - 40, 40, 15);
+            edgeUp = new Rect(lockZone.x() + 10, lockZone.y() - 40, 35, 15);
             edgeDown = new Rect(lockZone.x(), lockZone.y() + lockZone.height(), lockZone.width() , 10);
             //edgeDown2 = new Rect(lockZone.x() + lockZone.width() + 60, lockZone.y() + lockZone.height(), 10, 70);
-            edgeLeft = new Rect(lockZone.x() - 40, lockZone.y() + 10, 15, 40);
-            edgeRight = new Rect(lockZone.x() + lockZone.width() + 25, lockZone.y() + 10, 15, 40);
+            edgeLeft = new Rect(lockZone.x() - 40, lockZone.y() + 5, 15, 35);
+            edgeRight = new Rect(lockZone.x() + lockZone.width() + 25, lockZone.y() + 5, 15, 35);
             Frame frame;
             frame = grabber.grab();
             image = converter.convert(frame);
@@ -686,24 +685,25 @@ public class ObjectRecog {
                 case SearchWait:
                     break;
                 case SearchReturn:
+                    setSpeedY(500);
+                    setSpeedX(500);
                     searchState.move(this);
                     while (tachoX < tachoMap.get("Checkpoint").x - 100 || tachoX > tachoMap.get("Checkpoint").x + 100 || tachoY < tachoMap.get("Checkpoint").y - 100 || tachoY > tachoMap.get("Checkpoint").y + 100) {
-                        System.out.println("Returning...");
+                        System.out.println("Returning... " + getTachoPoint());
                     }
                     for (DetectedObject o : queue) {
                         trackersToRemove.add(trackers.get(detectedObjects.indexOf(o)));
                         objectsToRemove.add(o);
                     }
                         searchState = searchState.nextState();
+                        setCommandY("STOP");
                         System.out.println("Return: " + searchState);
                     break;
                 case SearchForward:
                     setTachoPoint(tachoMap.get("TL"));
                     searchState.move(this);
                     if (getTachoY() < 4000) {
-                        System.out.println(getSpeedY());
                         changeSpeedY(500);
-                        System.out.println(getSpeedY());
                     }
                     else {
                         changeSpeedY(150);
@@ -781,7 +781,7 @@ public class ObjectRecog {
                     setSpeedX(800);
                     setSpeedY(800);
                     //setTachoPoint(tachoMap.get("BL"));
-                    setTachoPoint(new java.awt.Point(tachoMap.get("BR").x / 2, 1100));
+                    setTachoPoint(tachoMap.get("Goal"));
                     searchState.move(this);
                     searchState = searchState.nextState();
                     break;
@@ -913,8 +913,12 @@ public class ObjectRecog {
                         lock.restart();
                         break;
                     case 2:
-                        setSpeedX(100);
                         setCommandX("RIGHT");
+                        if (getTachoX() < 2500) {
+                            changeSpeedX(500);
+                        } else {
+                            changeSpeedX(50);
+                        }
                         lock.restart();
                         break;
                     case -2:
@@ -943,8 +947,12 @@ public class ObjectRecog {
                         lock.restart();
                         break;
                     case 2:
-                        setSpeedY(100);
                         setCommandY("FORWARD");
+                        if (getTachoY() < 4800) {
+                            changeSpeedY(500);
+                        } else {
+                            changeSpeedY(50);
+                        }
                         lock.restart();
                         break;
                     case -2:
@@ -963,6 +971,7 @@ public class ObjectRecog {
             tachoMap.put("BR", new java.awt.Point(tachoX, 0));
             tachoMap.put("TL", new java.awt.Point(0, tachoY));
             tachoMap.put("TR", new java.awt.Point(tachoX, tachoY));
+            tachoMap.put("Goal", new java.awt.Point(tachoMap.get("BR").x / 2, 1150));
             System.out.println(tachoMap);
             setSpeedX(800);
             setSpeedY(800);
@@ -994,7 +1003,7 @@ public class ObjectRecog {
     }
 
     public int checkBoundry(Mat frontBound, Mat backBound) {
-        if ((getTachoY() < 1000 || getTachoY() > 3000) && contours.size() != 0) {
+        if ((getTachoY() < 1000 || getTachoY() > 3000)) {
             if (countNonZero(frontBound) > 0 && countNonZero(backBound) > 0) {
                 //System.out.println("STOP");
                 return 0;

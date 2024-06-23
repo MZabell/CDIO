@@ -52,6 +52,7 @@ public class Controller {
                 case "Stop":
                     break;
                 case "Exit":
+                    System.exit(0);
                     break;
             }
         }
