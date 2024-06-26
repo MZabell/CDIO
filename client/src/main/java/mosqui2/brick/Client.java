@@ -1,8 +1,5 @@
 package mosqui2.brick;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -10,9 +7,8 @@ import java.net.Socket;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.SimpleFormatter;
-import java.util.logging.StreamHandler;
 
+// Client class for EV3 robots
 public class Client {
 
     Socket socket;
@@ -30,18 +26,14 @@ public class Client {
 
     private ScheduledExecutorService executor;
 
-    private StreamHandler logger;
-
     public Client(String IP) {
         try {
             executor = Executors.newScheduledThreadPool(1);
             socket = new Socket(IP, 5000);
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
-            //logger = new StreamHandler(socket.getOutputStream(), new SimpleFormatter());
             tachoThread = new Thread(this::sendTacho);
             mode = in.readUTF();
-            //mode = "1";
             motorController = new MotorController(mode);
 
             switch (mode) {
@@ -59,7 +51,6 @@ public class Client {
             out.close();
             socket.close();
         } catch (Exception e) {
-            //e.printStackTrace();
             motorController.exit();
             System.out.println("Client disconnected");
         }
@@ -68,7 +59,6 @@ public class Client {
     private void modeX() throws IOException {
         out.writeUTF("READY");
         while (!(message = in.readUTF()).equals("EXIT")) {
-            //out.writeUTF(String.valueOf(motorController.getTacho()));
             splitMessage = message.split(":");
             speed = Integer.parseInt(splitMessage[1]);
             System.out.println("Command: " + splitMessage[0] + " --- Speed: " + speed);
@@ -109,6 +99,9 @@ public class Client {
                 case "STOP":
                     motorController.stop();
                     break;
+                case "RESETCOL":
+                    motorController.resetCollector();
+                    break;
                 default:
                     motorController.exit();
                     break;
@@ -117,14 +110,8 @@ public class Client {
     }
 
     private void modeY() throws IOException {
-        /*while (mode.equals("1")) {
-            motorController.getTacho();
-            motorController.moveForwardControlled();
-        }*/
-        //System.exit(0);
         out.writeUTF("READY");
         while (!(message = in.readUTF()).equals("EXIT")) {
-            //out.writeUTF(String.valueOf(motorController.getTacho()));
             splitMessage = message.split(":");
             speed = Integer.parseInt(splitMessage[1]);
             System.out.println("Command: " + splitMessage[0] + " --- Speed: " + speed);
@@ -167,7 +154,6 @@ public class Client {
         executor.scheduleAtFixedRate(() -> {
             try {
                 out.writeUTF(String.valueOf(motorController.getTacho()));
-                //System.out.println("Sent tacho: " + motorController.getTacho());
             } catch (IOException e) {
                 motorController.exit();
             }

@@ -1,10 +1,12 @@
 package mosqui2.utils;
 
 import org.bytedeco.javacv.FrameGrabber;
-import org.bytedeco.javacv.OpenCVFrameGrabber;
 
+// Enum for singleton implementation of FrameGrabber
 public enum VideoGrabber {
     INSTANCE;
+
+    FrameGrabber grabber;
 
     public FrameGrabber getGrabber() {
         return grabber;
@@ -13,7 +15,5 @@ public enum VideoGrabber {
     public void setGrabber(FrameGrabber grabber) {
         this.grabber = grabber;
     }
-
-    FrameGrabber grabber;
 
 }

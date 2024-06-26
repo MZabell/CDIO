@@ -3,6 +3,7 @@ package mosqui2.view;
 import javax.swing.*;
 import java.awt.event.ActionListener;
 
+// Class for menu buttons to provide User Experience
 public class Menu extends JPanel {
     public Menu(ActionListener listener) {
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
